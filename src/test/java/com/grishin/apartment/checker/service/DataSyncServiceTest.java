@@ -18,6 +18,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import java.io.IOException;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -60,8 +61,9 @@ public class DataSyncServiceTest {
     public void testProcessApartmentData() throws IOException {
         // Load test data from JSON file
         ObjectMapper objectMapper = new ObjectMapper();
+        String path = "irvine-apartment-sample.json";
         List<FloorPlanGroupDTO> apartmentDataList = objectMapper.readValue(
-                new ClassPathResource("apartment-data.json").getInputStream(),
+                new ClassPathResource(path).getInputStream(),
                 new TypeReference<List<FloorPlanGroupDTO>>() {});
 
         // Verify test data is loaded correctly
@@ -83,11 +85,11 @@ public class DataSyncServiceTest {
             // Check if units were created
             if (groupDTO.getUnits() != null) {
                 for (AptDTO aptDTO : groupDTO.getUnits()) {
-                    Optional<Unit> unitOpt = unitRepository.findById(aptDTO.getUnitID());
-                    assertTrue(unitOpt.isPresent(), "Unit " + aptDTO.getUnitID() + " should exist");
+                    Optional<Unit> unitOpt = unitRepository.findById(aptDTO.getObjectID());
+                    assertTrue(unitOpt.isPresent(), "Unit " + aptDTO.getObjectID() + " should exist");
 
                     Unit unit = unitOpt.get();
-                    assertEquals(aptDTO.getUnitMarketingName(), unit.getUnitMarketingName());
+                    assertEquals(aptDTO.getUnitMarketingName(), unit.getUnitMarketingName()); // unitID is not unique
                     assertTrue(unit.getGroups().contains(group), "Unit should be associated with the group");
 
                     // Verify floor plan was created
@@ -109,7 +111,7 @@ public class DataSyncServiceTest {
                     int expectedPriceCount = 0;
                     if (aptDTO.getUnitEarliestAvailable() != null) expectedPriceCount++;
                     if (aptDTO.getUnitStartingPrice() != null) expectedPriceCount++;
-                    if (aptDTO.getUnitLeasePrice() != null) expectedPriceCount += aptDTO.getUnitLeasePrice().size();
+                    if (aptDTO.getUnitLeasePrice() != null) expectedPriceCount += new HashSet<>(aptDTO.getUnitLeasePrice()).size();
 
                     assertEquals(expectedPriceCount, unit.getLeasePrices().size());
                 }

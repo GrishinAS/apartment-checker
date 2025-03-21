@@ -13,8 +13,9 @@ import java.util.Set;
 @AllArgsConstructor
 public class Unit {
     @Id
-    private String unitId;
+    private String objectId;
 
+    private String unitId;
     private String unitMarketingName;
     private String unitCrmId;
     private Integer unitFloor;
@@ -25,7 +26,7 @@ public class Unit {
     private Boolean unitIsStudio;
     private Boolean unitHasDiscount;
     private String featuredAmenity;
-    private String objectId;
+
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude

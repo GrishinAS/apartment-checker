@@ -72,7 +72,7 @@ public class DataSyncService {
             if (apartmentData.getUnits() != null) {
                 for (AptDTO unit : apartmentData.getUnits()) {
                     processUnit(unit, group);
-                    processedUnitIds.add(unit.getUnitID());
+                    processedUnitIds.add(unit.getObjectID());
                 }
             }
 
@@ -80,7 +80,11 @@ public class DataSyncService {
                 for (String unitId : apartmentData.getUnitIds()) {
                     Optional<Unit> unitOpt = unitRepository.findById(unitId);
                     unitOpt.ifPresent(unit -> {
-                        if (!group.getUnits().contains(unit)) {
+                        // Check if the unit is already in the group to avoid duplicates
+                        boolean unitAlreadyInGroup = group.getUnits().stream()
+                                .anyMatch(u -> u.getObjectId().equals(unit.getObjectId()));
+
+                        if (!unitAlreadyInGroup) {
                             group.getUnits().add(unit);
                             unit.getGroups().add(group);
                             unitRepository.save(unit);
@@ -122,7 +126,10 @@ public class DataSyncService {
     }
 
     private void addUnitToGroup(Unit unit, FloorPlanGroup group) {
-        if (!group.getUnits().contains(unit)) {
+        boolean unitAlreadyInGroup = group.getUnits().stream()
+                .anyMatch(u -> u.getObjectId().equals(unit.getObjectId()));
+
+        if (!unitAlreadyInGroup) {
             group.getUnits().add(unit);
             unit.getGroups().add(group);
         }
@@ -166,7 +173,7 @@ public class DataSyncService {
     }
 
     private Unit getOrCreateUnit(AptDTO aptDTO, Community community, FloorPlan floorPlan) {
-        Unit unit = unitRepository.findById(aptDTO.getUnitID()).orElse(new Unit());
+        Unit unit = unitRepository.findById(aptDTO.getObjectID()).orElse(new Unit());
 
         unit.setUnitId(aptDTO.getUnitID());
         unit.setUnitMarketingName(aptDTO.getUnitMarketingName());
@@ -206,7 +213,7 @@ public class DataSyncService {
 
     private void processLeasePrices(Unit unit, AptDTO aptDTO) {
         
-        leasePriceRepository.deleteByUnitUnitId(unit.getUnitId());
+        leasePriceRepository.deleteByUnitUnitId(unit.getObjectId());
         unit.getLeasePrices().clear();
         
         if (aptDTO.getUnitEarliestAvailable() != null) {
@@ -252,7 +259,7 @@ public class DataSyncService {
     private void handleRemovedUnits(Set<String> processedUnitIds) {
         List<Unit> allUnits = unitRepository.findAll();
         List<Unit> removedUnits = allUnits.stream()
-                .filter(unit -> !processedUnitIds.contains(unit.getUnitId()))
+                .filter(unit -> !processedUnitIds.contains(unit.getObjectId()))
                 .toList();
 
         if (!removedUnits.isEmpty()) {

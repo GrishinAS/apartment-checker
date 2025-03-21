@@ -34,7 +34,7 @@ public class FloorPlanGroup {
     @JoinTable(
             name = "unit_id_group_mappings",
             joinColumns = @JoinColumn(name = "group_id"),
-            inverseJoinColumns = @JoinColumn(name = "unit_id")
+            inverseJoinColumns = @JoinColumn(name = "objectID")
     )
     private Set<Unit> units = new HashSet<>();
 }
