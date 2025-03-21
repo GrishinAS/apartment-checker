@@ -1,0 +1,145 @@
+[
+  {
+    "groupType": "floorPlanImage",
+    "floorPlanIds": [
+      "4534066_21",
+      "4661945_21",
+      "4750693_25",
+      "4816096_16",
+      "4941177_20",
+      "5324189_17"
+    ],
+    "units": [
+      {
+        "buildingNumber": "03",
+        "communityIDAEM": "11584d39-2644-4b8e-8548-7c2a126c0570",
+        "communityMarketingName": "Promenade at Irvine Spectrum",
+        "featuredAmenity": " ",
+        "floorplanBath": 1,
+        "floorplanBed": 0,
+        "floorplanCRMID": "0x0000000000000D19",
+        "floorplanDeposit": 600,
+        "floorplanID": "21",
+        "floorplanName": "Plan 1",
+        "floorplanPath": "/content/dam/apartments/3-readytopublish/communities/orangecounty/irvine/promenade/floorplans/Promenade_Plan_01.eps",
+        "floorplanSqFt": 681,
+        "floorplanUniqueID": "4534066_21",
+        "propertyAddress": "1100 Perlita",
+        "propertyID": 4534066,
+        "propertyZip": "92618-4816",
+        "unitAmenities": [
+          "1st Floor",
+          "Dog Friendly",
+          "Elevator",
+          "Hardwood-Style Floor - Full",
+          "Smart Thermostat",
+          "Stainless Steel Appliances",
+          "Washer & Dryer In Home"
+        ],
+        "unitCRMID": "0x0000000000014ABC",
+        "unitEarliestAvailable": {
+          "date": "20250318",
+          "dateTimeStamp": 1742256000,
+          "price": 2675,
+          "term": 14
+        },
+        "unitFloor": 1,
+        "unitHasDiscount": false,
+        "unitID": "374",
+        "unitIsStudio": true,
+        "unitLeasePrice": [
+          {
+            "date": "20250318",
+            "dateTimeStamp": 1742256000,
+            "price": 3480,
+            "term": 6
+          },
+          {
+            "date": "20250318",
+            "dateTimeStamp": 1742256000,
+            "price": 3210,
+            "term": 8
+          }
+        ],
+        "unitMarketingName": "3136",
+        "unitSqFt": 681,
+        "unitStartingPrice": {
+          "date": "20250318",
+          "dateTimeStamp": 1742256000,
+          "price": 2675,
+          "term": 14
+        },
+        "unitTypeCode": "S1C1",
+        "unitTypeName": "Studio",
+        "objectID": "4534066_21_374"
+      },
+      {
+        "buildingNumber": "08",
+        "communityIDAEM": "11584d39-2644-4b8e-8548-7c2a126c0570",
+        "communityMarketingName": "Promenade at Irvine Spectrum",
+        "featuredAmenity": " ",
+        "floorplanBath": 1,
+        "floorplanBed": 0,
+        "floorplanCRMID": "0x00000000000012FA",
+        "floorplanDeposit": 600,
+        "floorplanID": "20",
+        "floorplanName": "Plan 1",
+        "floorplanPath": "/content/dam/apartments/3-readytopublish/communities/orangecounty/irvine/promenade/floorplans/Promenade_Plan_01.eps",
+        "floorplanSqFt": 625,
+        "floorplanUniqueID": "4941177_20",
+        "propertyAddress": "8100 Miramonte",
+        "propertyID": 4941177,
+        "propertyZip": "92618-5609",
+        "unitAmenities": [
+          "4th Floor",
+          "Courtyard view",
+          "Elevator",
+          "Hardwood-Style Floor - Full",
+          "No Neighbors Above",
+          "Smart Thermostat",
+          "Stainless Steel Appliances",
+          "Washer & Dryer In Home"
+        ],
+        "unitCRMID": "0x0000000000015A3F",
+        "unitEarliestAvailable": {
+          "date": "20250318",
+          "dateTimeStamp": 1742256000,
+          "price": 2725,
+          "term": 14
+        },
+        "unitFloor": 4,
+        "unitHasDiscount": false,
+        "unitID": "254",
+        "unitIsStudio": true,
+        "unitLeasePrice": [
+          {
+            "date": "20250318",
+            "dateTimeStamp": 1742256000,
+            "price": 3480,
+            "term": 6
+          },
+          {
+            "date": "20250318",
+            "dateTimeStamp": 1742256000,
+            "price": 3210,
+            "term": 8
+          }
+        ],
+        "unitMarketingName": "3136",
+        "unitSqFt": 681,
+        "unitStartingPrice": {
+          "date": "20250318",
+          "dateTimeStamp": 1742256000,
+          "price": 2675,
+          "term": 14
+        },
+        "unitTypeCode": "S1C1",
+        "unitTypeName": "Studio",
+        "objectID": "4534066_21_374"
+      }
+    ],
+    "unitIds": [
+      "4661945_22_38"
+    ]
+  }
+]

@@ -1,0 +1,30 @@
+apartments:
+  url: https://search.irvinecompanyapartments.com/units/rank
+  checkIntervalMinutes: 30
+  communities:
+    - communityId: 11584d39-2644-4b8e-8548-7c2a126c0570
+      name: Promenade
+    - communityId: 460bfd6a-5f76-4e47-9d6d-2fa3d8f6fc11
+      name: Los Olivos
+
+spring:
+  application.name: apartment.checker
+  datasource:
+    url: jdbc:h2:mem:apartmentdb
+    driverClassName: org.h2.Driver
+    username: sa
+    password: password
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
