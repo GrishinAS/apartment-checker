@@ -1,17 +1,8 @@
 package com.grishin.apartment.checker.storage.entity;
 
-import lombok.Data;
-import lombok.NoArgsConstructor;
-import lombok.AllArgsConstructor;
+import jakarta.persistence.*;
+import lombok.*;
 
-import jakarta.persistence.Entity;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import jakarta.persistence.OneToMany;
-import jakarta.persistence.ManyToMany;
-import jakarta.persistence.CascadeType;
-import jakarta.persistence.Column;
-import jakarta.persistence.UniqueConstraint;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -35,9 +26,13 @@ public class FloorPlan {
     private Integer floorPlanBath;
     private Integer floorPlanDeposit;
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @OneToMany(mappedBy = "floorPlan", cascade = CascadeType.ALL)
     private Set<Unit> units = new HashSet<>();
 
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
     @ManyToMany(mappedBy = "floorPlans")
     private Set<FloorPlanGroup> groups = new HashSet<>();
 }

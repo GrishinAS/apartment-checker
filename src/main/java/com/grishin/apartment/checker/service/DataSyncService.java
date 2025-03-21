@@ -1,6 +1,5 @@
 package com.grishin.apartment.checker.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.grishin.apartment.checker.config.ApartmentsConfig;
 import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.AptDTO;
@@ -10,15 +9,17 @@ import com.grishin.apartment.checker.storage.*;
 import com.grishin.apartment.checker.storage.entity.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.*;
-import java.util.stream.Collectors;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -31,12 +32,12 @@ public class DataSyncService {
     private final UnitRepository unitRepository;
     private final UnitAmenityRepository unitAmenityRepository;
     private final LeasePriceRepository leasePriceRepository;
-    private final IrvineCompanyClient client;
+    private final ApartmentsFetcherClient client;
     private final ApartmentsConfig apartmentsConfig;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
     
-    @Scheduled(fixedRateString = "${apartments.checkIntervalMinutes * 60 * 1000}", initialDelay = 0)
+    @Scheduled(fixedRateString = "${apartments.checkInterval}", initialDelay = 0)
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
@@ -50,10 +51,11 @@ public class DataSyncService {
         }
     }
 
+    @Cacheable("apartments") // remove after development
     private List<FloorPlanGroupDTO> fetchAvailableApartments() {
         CommunityConfig community = apartmentsConfig.getCommunities().stream()
-                .filter(apt -> apt.getCommunityId().equals("Los Olivos")).findFirst().orElseThrow();
-        return client.searchApartments(community.getCommunityId(), 10);
+                .filter(apt -> apt.getName().equals("Los Olivos")).findFirst().orElseThrow();
+        return client.fetchApartments(community.getCommunityId(), 10);
     }
 
     @Transactional
@@ -64,6 +66,7 @@ public class DataSyncService {
         for (FloorPlanGroupDTO apartmentData : apartmentDataList) {
             
             FloorPlanGroup group = getOrCreateFloorPlanGroup(apartmentData.getGroupType());
+            floorPlanGroupRepository.saveAndFlush(group);
 
             
             if (apartmentData.getUnits() != null) {
@@ -77,8 +80,11 @@ public class DataSyncService {
                 for (String unitId : apartmentData.getUnitIds()) {
                     Optional<Unit> unitOpt = unitRepository.findById(unitId);
                     unitOpt.ifPresent(unit -> {
-                        group.getUnits().add(unit);
-                        unit.getGroups().add(group);
+                        if (!group.getUnits().contains(unit)) {
+                            group.getUnits().add(unit);
+                            unit.getGroups().add(group);
+                            unitRepository.save(unit);
+                        }
                     });
                 }
             }
@@ -104,18 +110,29 @@ public class DataSyncService {
         FloorPlan floorPlan = getOrCreateFloorPlan(aptDto);
         
         Unit unit = getOrCreateUnit(aptDto, community, floorPlan);
-        
-        group.getUnits().add(unit);
-        unit.getGroups().add(group);
-        
-        group.getFloorPlans().add(floorPlan);
-        floorPlan.getGroups().add(group);
+
+        addUnitToGroup(unit, group);
+        addFloorPlanToGroup(floorPlan, group);
         
         processUnitAmenities(unit, aptDto.getUnitAmenities());
         
         processLeasePrices(unit, aptDto);
         
         unitRepository.save(unit);
+    }
+
+    private void addUnitToGroup(Unit unit, FloorPlanGroup group) {
+        if (!group.getUnits().contains(unit)) {
+            group.getUnits().add(unit);
+            unit.getGroups().add(group);
+        }
+    }
+
+    private void addFloorPlanToGroup(FloorPlan floorPlan, FloorPlanGroup group) {
+        if (!group.getFloorPlans().contains(floorPlan)) {
+            group.getFloorPlans().add(floorPlan);
+            floorPlan.getGroups().add(group);
+        }
     }
 
     private Community getOrCreateCommunity(AptDTO aptDTO) {

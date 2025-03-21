@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.Objects;
 
 @Service
-public class IrvineCompanyClient {
+public class IrvineCompanyClient implements ApartmentsFetcherClient {
     private final RestTemplate restTemplate;
     private final ApartmentsConfig apartmentsConfig;
 
@@ -26,7 +26,8 @@ public class IrvineCompanyClient {
         this.apartmentsConfig = apartmentsConfig;
     }
 
-    public List<FloorPlanGroupDTO> searchApartments(String communityId, int unitsPerFloor) {
+    @Override
+    public List<FloorPlanGroupDTO> fetchApartments(String communityId, int unitsPerFloor) {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 

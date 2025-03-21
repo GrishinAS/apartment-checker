@@ -6,15 +6,15 @@ import com.grishin.apartment.checker.dto.AptDTO;
 import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
 import com.grishin.apartment.checker.storage.ApartmentsRepository;
 import com.grishin.apartment.checker.telegram.TelegramBot;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -53,7 +53,7 @@ public class ApartmentChecker {
     private List<FloorPlanGroupDTO> fetchAvailableApartments() {
         CommunityConfig community = apartmentsConfig.getCommunities().stream()
                 .filter(apt -> apt.getCommunityId().equals("Los Olivos")).findFirst().orElseThrow();
-        return client.searchApartments(community.getCommunityId(), 10);
+        return client.fetchApartments(community.getCommunityId(), 10);
     }
 
     private boolean matchesFilters(AptDTO apt) {

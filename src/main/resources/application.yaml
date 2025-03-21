@@ -1,11 +1,17 @@
 apartments:
   url: https://search.irvinecompanyapartments.com/units/rank
-  checkIntervalMinutes: 30
+  checkInterval: 1800000 # 30 * 60 * 1000
   communities:
     - communityId: 11584d39-2644-4b8e-8548-7c2a126c0570
       name: Promenade
     - communityId: 460bfd6a-5f76-4e47-9d6d-2fa3d8f6fc11
       name: Los Olivos
+
+logging:
+  level:
+    org:
+      hibernate:
+        SQL: DEBUG
 
 spring:
   application.name: apartment.checker
