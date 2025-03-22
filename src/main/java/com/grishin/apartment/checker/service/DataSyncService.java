@@ -7,10 +7,10 @@ import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
 import com.grishin.apartment.checker.dto.LeaseTermDTO;
 import com.grishin.apartment.checker.storage.*;
 import com.grishin.apartment.checker.storage.entity.*;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.cache.annotation.Cacheable;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,8 +36,8 @@ public class DataSyncService {
     private final ApartmentsConfig apartmentsConfig;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
-    
-    @Scheduled(fixedRateString = "${apartments.checkInterval}", initialDelay = 0)
+
+    @PostConstruct
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
@@ -121,8 +121,6 @@ public class DataSyncService {
         processUnitAmenities(unit, aptDto.getUnitAmenities());
         
         processLeasePrices(unit, aptDto);
-        
-        unitRepository.save(unit);
     }
 
     private void addUnitToGroup(Unit unit, FloorPlanGroup group) {
@@ -264,14 +262,7 @@ public class DataSyncService {
 
         if (!removedUnits.isEmpty()) {
             log.info("Detected {} removed units", removedUnits.size());
-            // Option 1: Delete removed units
-            // unitRepository.deleteAll(removedUnits);
-
-            // Option 2: Flag them as inactive
-            // for (Unit unit : removedUnits) {
-            //     unit.setActive(false);
-            //     unitRepository.save(unit);
-            // }
+            unitRepository.deleteAll(removedUnits);
         }
     }
 }

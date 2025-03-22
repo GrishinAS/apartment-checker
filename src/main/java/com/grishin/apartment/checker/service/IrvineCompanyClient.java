@@ -1,7 +1,7 @@
 package com.grishin.apartment.checker.service;
 
 import com.grishin.apartment.checker.config.ApartmentsConfig;
-import com.grishin.apartment.checker.dto.ApartmentSearchRequestDTO;
+import com.grishin.apartment.checker.dto.ApartmentSearchRequest;
 import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
@@ -31,13 +31,13 @@ public class IrvineCompanyClient implements ApartmentsFetcherClient {
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
 
-        ApartmentSearchRequestDTO requestBody = ApartmentSearchRequestDTO.builder()
+        ApartmentSearchRequest requestBody = ApartmentSearchRequest.builder()
                 .communityId(communityId)
                 .unitsPerFloor(unitsPerFloor)
                 .env("prod")
                 .build();
 
-        HttpEntity<ApartmentSearchRequestDTO> requestEntity = new HttpEntity<>(requestBody, headers);
+        HttpEntity<ApartmentSearchRequest> requestEntity = new HttpEntity<>(requestBody, headers);
 
         ResponseEntity<FloorPlanGroupDTO[]> response = restTemplate.postForEntity(
                 apartmentsConfig.getUrl(),

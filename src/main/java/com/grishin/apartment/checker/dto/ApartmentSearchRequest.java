@@ -9,7 +9,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class ApartmentSearchRequestDTO {
+public class ApartmentSearchRequest {
     private String communityId;
     private int unitsPerFloor;
     private String env;
