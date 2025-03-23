@@ -6,15 +6,21 @@ import com.grishin.apartment.checker.dto.ApartmentFilter;
 import com.grishin.apartment.checker.service.UserFilterService;
 import com.grishin.apartment.checker.storage.UnitAmenityRepository;
 import com.grishin.apartment.checker.storage.entity.UnitAmenity;
+import io.github.dostonhamrakulov.InlineCalendarBuilder;
+import io.github.dostonhamrakulov.InlineCalendarCommandUtil;
+import io.github.dostonhamrakulov.LanguageEnum;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
-import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
+import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.text.ParseException;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 
 import static com.grishin.apartment.checker.telegram.KeyboardUtils.*;
@@ -29,6 +35,8 @@ public class MainBotController extends TelegramLongPollingBot {
     private final ApartmentsConfig apartmentsConfig;
     private final UserFilterService userFilterService;
     private final UnitAmenityRepository unitAmenityRepository;
+
+    InlineCalendarBuilder inlineCalendarBuilder = new InlineCalendarBuilder(LanguageEnum.EN);
 
     @Value("${telegram.bot.name}")
     private String botName;
@@ -87,13 +95,11 @@ public class MainBotController extends TelegramLongPollingBot {
 
                 case SETTING_MIN_PRICE:
                     processPrice(chatId, messageText);
-                    userStates.put(chatId, ConversationState.SETTING_MAX_PRICE);
                     sendPriceRequest(chatId);
                     break;
                 case SETTING_MAX_PRICE:
                     processPrice(chatId, messageText);
-                    userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
-                    sendDateRangeSlider(chatId, new Date());
+                    sendDateRangeSlider(chatId, update);
                     break;
 
                 case REVIEW_PREFERENCES:
@@ -117,62 +123,88 @@ public class MainBotController extends TelegramLongPollingBot {
         try {
             String callbackData = update.getCallbackQuery().getData();
             long chatId = update.getCallbackQuery().getMessage().getChatId();
-            int messageId = update.getCallbackQuery().getMessage().getMessageId();
 
             String[] parts = callbackData.split(":");
-            String action = parts[0];
 
-            ApartmentFilter preferences = userPreferences.get(chatId);
+            if (!parts[1].equals("DATE")) {
+                if (InlineCalendarCommandUtil.isCalendarIgnoreButtonClicked(update)) {
+                    return;
+                }
+                if (InlineCalendarCommandUtil.isCalendarNavigationButtonClicked(update)) {
+                    SendMessage sendMessage = new SendMessage();
+                    sendMessage.setChatId(String.valueOf(chatId));
+                    if (update.getCallbackQuery().getMessage() instanceof Message message)
+                        sendMessage.setText(message.getText());
+                    else
+                        sendMessage.setText("");
+                    sendMessage.setReplyMarkup(inlineCalendarBuilder.build(update));
+                    execute(sendMessage);
+                    return;
+                }
+            }
+            Date chosenDate = DATE_FORMAT.parse(parts[2]);
 
-            switch (action) {
-
-                case "min_date":
-                    handleMinDateCallback(new Date(Long.parseLong(parts[1])), preferences, chatId, messageId);
+            ConversationState state = userStates.get(chatId);
+            log.info("Received callback query with data '{}', state: {}", callbackData, state);
+            switch (state) {
+                case SETTING_MIN_DATE:
+                    handleMinDateCallback(chosenDate, chatId, update);
                     break;
 
-                case "max_date":
-                    handleMaxDateCallback(new Date(Long.parseLong(parts[1])), preferences, chatId, messageId);
+                case SETTING_MAX_DATE:
+                    handleMaxDateCallback(chosenDate, chatId, update);
                     break;
             }
-        } catch (NumberFormatException | TelegramApiException e) {
+        } catch (NumberFormatException | TelegramApiException | ParseException e) {
             log.error("Error handling callback query", e);
             throw new RuntimeException(e);
         }
     }
 
-    private void handleMaxDateCallback(Date dateValue, ApartmentFilter preferences, long chatId, int messageId) throws TelegramApiException {
-        preferences.setMaxDate(dateValue);
-        if (dateValue == preferences.getMinDate()) {
-            // If max equals min, just proceed to summary
-            showPreferencesSummary(chatId);
+    private void handleMaxDateCallback(Date dateValue, long chatId, Update update) throws TelegramApiException {
+        ApartmentFilter preferences = userPreferences.get(chatId);
+        LocalDate enteredDate = dateValue.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+        Date savedMinDate = preferences.getMinDate();
+        LocalDate minDate = savedMinDate.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+        LocalDate maxPossibleDate = LocalDate.now().plusDays(90);
+        if (enteredDate.isAfter(minDate) && enteredDate.isBefore(maxPossibleDate)) {
+            log.info("Setting max date to {}", dateValue);
+            preferences.setMaxDate(dateValue);
             userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
+            showPreferencesSummary(chatId);
         } else {
-            EditMessageText editMessage = createDateSliderMessage(chatId, messageId, dateValue, "max");
-            execute(editMessage);
-
-            showPreferencesSummary(chatId);
-            userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
+            log.warn("Incorrect max date chosen: {}, another try", dateValue);
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText("Entered date should be between minimum date and three months from today");
+            execute(message);
+            sendDateRangeSlider(chatId, update);
         }
     }
 
-    private void handleMinDateCallback(Date dateValue, ApartmentFilter preferences, long chatId, int messageId) throws TelegramApiException {
-        preferences.setMinDate(dateValue);
-        // Skip max day selection if selected date is the maximum possible date
-        Date maxPossibleDate = getDateWithOffset(90);
-        if (dateValue.equals(maxPossibleDate)) {
-            preferences.setMaxDate(maxPossibleDate);
-            showPreferencesSummary(chatId);
-            userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
-        } else {
-            EditMessageText editMessage = createDateSliderMessage(chatId, messageId, dateValue, "min");
-            execute(editMessage);
-
-            Date initialMaxDate = preferences.getMaxDate();
-            if (initialMaxDate == null || initialMaxDate.before(dateValue)) {
-                initialMaxDate = dateValue;
-            }
-            sendDateRangeSlider(chatId, initialMaxDate);
+    private void handleMinDateCallback(Date dateValue, long chatId, Update update) throws TelegramApiException {
+        ApartmentFilter preferences = userPreferences.get(chatId);
+        LocalDate enteredDate = dateValue.toInstant()
+                .atZone(ZoneId.systemDefault())
+                .toLocalDate();
+        LocalDate today = LocalDate.now();
+        LocalDate maxPossibleDate = today.plusDays(90);
+        if (enteredDate.isAfter(today) && enteredDate.isBefore(maxPossibleDate)) {
+            log.info("Setting min date to {}", dateValue);
+            preferences.setMinDate(dateValue);
             userStates.put(chatId, ConversationState.SETTING_MAX_DATE);
+            sendDateRangeSlider(chatId, update);
+        } else {
+            log.warn("Incorrect min date chosen: {}, another try", dateValue);
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText("Entered date should be between today and three months from today");
+            execute(message);
+            sendDateRangeSlider(chatId, update);
         }
     }
 
@@ -197,18 +229,26 @@ public class MainBotController extends TelegramLongPollingBot {
         ConversationState state = userStates.get(chatId);
         log.info("Processing price: {}, state: {}", value, state);
         ApartmentFilter preferences = userPreferences.get(chatId);
-        if (value <= MAX_PRICE && value >= MIN_PRICE) {
-            if (state == ConversationState.SETTING_MIN_PRICE)
-                preferences.setMinPrice(value);
-            else if (state == ConversationState.SETTING_MAX_PRICE)
-                preferences.setMaxPrice(value);
-            else throw new RuntimeException("Invalid state");
-        } else  {
+        if (value > MAX_PRICE || value < MIN_PRICE) {
+            log.warn("Incorrect price chosen: {}, another try", priceString);
             SendMessage message = new SendMessage();
             message.setChatId(String.valueOf(chatId));
             message.setText("Entered price should be between %d and %d".formatted(MIN_PRICE, MAX_PRICE));
+            execute(message);
             sendPriceRequest(chatId);
+            return;
         }
+        if (state == ConversationState.SETTING_MIN_PRICE) {
+            log.info("Setting min price to {}", value);
+            preferences.setMinPrice(value);
+            userStates.put(chatId, ConversationState.SETTING_MAX_PRICE);
+        }
+        else if (state == ConversationState.SETTING_MAX_PRICE) {
+            log.info("Setting max price to {}", value);
+            preferences.setMaxPrice(value);
+            userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
+        }
+        else throw new RuntimeException("Invalid state");
     }
 
     private void sendCommunitySelection(long chatId) throws TelegramApiException {
@@ -235,18 +275,19 @@ public class MainBotController extends TelegramLongPollingBot {
         execute(message);
     }
 
-    public void sendDateRangeSlider(long chatId, Date currentDate) throws TelegramApiException {
-        String title = userStates.get(chatId) == ConversationState.SETTING_MIN_DATE ?
-                "Set minimum date:" : "Set maximum date:";
-
-        Date date = Calendar.getInstance().getTime();
-        String formattedDate = formatDate(date);
+    public void sendDateRangeSlider(long chatId, Update update) throws TelegramApiException {
+        ConversationState state = userStates.get(chatId);
+        String title;
+        if (state == ConversationState.SETTING_MIN_DATE)
+            title = "Set minimum date:";
+        else if (state == ConversationState.SETTING_MAX_DATE)
+            title = "Set maximum date:";
+        else throw new RuntimeException("Invalid state");
 
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
-        message.setText(title + " " + formattedDate + "\n\n" + createDateSliderView(currentDate));
-        message.setReplyMarkup(createDateSliderKeyboard(currentDate,
-                userStates.get(chatId) == ConversationState.SETTING_MIN_DATE ? "min_date" : "max_date"));
+        message.setText(title);
+        message.setReplyMarkup(inlineCalendarBuilder.build(update));
 
         execute(message);
     }
@@ -268,11 +309,11 @@ public class MainBotController extends TelegramLongPollingBot {
         summaryMessage.append("📅 Date Range: ").append(formatDate(minDate)).append(" - ").append(formatDate(maxDate)).append("\n\n");
 
         summaryMessage.append("Is this correct? Type 'confirm' to save or 'restart' to begin again.");
-
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(summaryMessage.toString());
-
+        SendMessage message = createMessageWithKeyboard(
+                chatId,
+                "Is this correct? Press 'confirm' to save or 'restart' to begin again.",
+                createKeyboardFromList(List.of("Confirm", "Restart"))
+        );
         execute(message);
     }
 

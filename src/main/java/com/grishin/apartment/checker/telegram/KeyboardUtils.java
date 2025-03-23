@@ -19,6 +19,7 @@ public class KeyboardUtils {
     public static final int MIN_PRICE = 2000;
     public static final int MAX_PRICE = 5000;
     public static final int PRICE_STEP = 100;
+    public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd-MM-yyyy");
 
     public static EditMessageText createPriceSliderMessage(long chatId, int messageId, int value, String type) {
         EditMessageText editMessage = new EditMessageText();
