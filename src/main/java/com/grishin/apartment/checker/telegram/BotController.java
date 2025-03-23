@@ -5,9 +5,7 @@ import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.ApartmentFilter;
 import com.grishin.apartment.checker.service.UserFilterService;
 import com.grishin.apartment.checker.storage.UnitAmenityRepository;
-import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
 import com.grishin.apartment.checker.storage.entity.UnitAmenity;
-import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -31,53 +29,48 @@ public class BotController extends TelegramLongPollingBot {
     private final ApartmentsConfig apartmentsConfig;
     private final UserFilterService userFilterService;
     private final UnitAmenityRepository unitAmenityRepository;
-    private final UserFilterPreferenceRepository userFilterRepository;
 
-    @Value("${telegram.bot.chatId}")
-    private String chatId;
     @Value("${telegram.bot.name}")
     private String botName;
-
-
 
     public BotController(
             @Value("${telegram.bot.token}") String token,
             ApartmentsConfig apartmentsConfig,
             UserFilterService userFilterService,
-            UnitAmenityRepository unitAmenityRepository,
-            UserFilterPreferenceRepository userFilterRepository) {
+            UnitAmenityRepository unitAmenityRepository) {
         super(token);
         this.apartmentsConfig = apartmentsConfig;
         this.userFilterService = userFilterService;
         this.unitAmenityRepository = unitAmenityRepository;
-        this.userFilterRepository = userFilterRepository;
     }
 
     @Override
     public void onUpdateReceived(Update update) {
-        if (update.hasCallbackQuery()) {
-            handleCallbackQuery(update);
-            return;
-        }
-        if (!update.hasMessage() || !update.getMessage().hasText()) {
-            return;
-        }
-
-        long chatId = update.getMessage().getChatId();
-        String messageText = update.getMessage().getText();
-
-        if (!userStates.containsKey(chatId)) {
-            userStates.put(chatId, ConversationState.IDLE);
-        }
-
-        ConversationState currentState = userStates.get(chatId);
-
+        log.info("Received update: {}", update.toString());
         try {
+            if (update.hasCallbackQuery()) {
+                handleCallbackQuery(update);
+                return;
+            }
+            if (!update.hasMessage() || !update.getMessage().hasText()) {
+                return;
+            }
+
+            long chatId = update.getMessage().getChatId();
+            String messageText = update.getMessage().getText();
+
+            if (!userStates.containsKey(chatId)) {
+                userStates.put(chatId, ConversationState.IDLE);
+            }
+
+            ConversationState currentState = userStates.get(chatId);
+
             switch (currentState) {
                 case IDLE:
                     if (messageText.equals("/start")) {
                         sendCommunitySelection(chatId);
                         userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
+                        userPreferences.put(chatId, new ApartmentFilter());
                     }
                     break;
 
@@ -105,8 +98,8 @@ public class BotController extends TelegramLongPollingBot {
                     }
                     break;
             }
-        } catch (TelegramApiException e) {
-            log.error("Error during message send", e);
+        } catch (Exception e) {
+            log.error("Error during handling update", e);
         }
     }
 
@@ -183,9 +176,9 @@ public class BotController extends TelegramLongPollingBot {
     }
 
     private void handleMaxPriceCallback(int value, ApartmentFilter preferences, long chatId, int messageId) throws TelegramApiException {
-        if (value >= preferences.getMinPrice()) {
+        if (value >= MIN_PRICE) { // handle incorrect value
             preferences.setMaxPrice(value);
-            if (value == preferences.getMinPrice()) {
+            if (value == MIN_PRICE) {
                 // If max equals min, just proceed
                 sendDateRangeSlider(chatId, new Date());
                 userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
@@ -201,7 +194,7 @@ public class BotController extends TelegramLongPollingBot {
     }
 
     private void handleMinPriceCallback(int value, ApartmentFilter preferences, long chatId, int messageId) throws TelegramApiException {
-        if (value <= preferences.getMaxPrice() || preferences.getMaxPrice() == 0) {
+        if (value <= MAX_PRICE) { // handle incorrect value
             preferences.setMinPrice(value);
             if (value == MAX_PRICE) {
                 // If min price is at max, set max price equal to it
@@ -274,11 +267,12 @@ public class BotController extends TelegramLongPollingBot {
     }
 
     private void showPreferencesSummary(long chatId) throws TelegramApiException {
-        UserFilterPreference prefs = userFilterRepository.findByUserId(chatId).orElseThrow();
+        ApartmentFilter prefs = userPreferences.get(chatId);
+        String selectedCommunity = selectedCommunities.get(chatId);
 
         StringBuilder summaryMessage = new StringBuilder();
         summaryMessage.append("⭐ Your Preferences Summary ⭐\n\n");
-        summaryMessage.append("🏠 Community: ").append(prefs.getSelectedCommunity()).append("\n\n");
+        summaryMessage.append("🏠 Community: ").append(selectedCommunity).append("\n\n");
 
         summaryMessage.append("🏷️ Filters: ").append(prefs.getAmenities()).append("\n\n");
 

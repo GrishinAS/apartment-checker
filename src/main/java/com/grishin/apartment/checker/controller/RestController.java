@@ -1,6 +1,6 @@
 package com.grishin.apartment.checker.controller;
 
-import com.grishin.apartment.checker.service.DataSyncService;
+import com.grishin.apartment.checker.service.ApartmentChecker;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
 
@@ -8,10 +8,10 @@ import org.springframework.web.bind.annotation.GetMapping;
 @RequiredArgsConstructor
 public class RestController {
 
-    private final DataSyncService dataSyncService;
+    private final ApartmentChecker apartmentChecker;
 
     @GetMapping("/sync")
     public void syncData() {
-        dataSyncService.syncApartmentData();
+        apartmentChecker.syncApartmentData();
     }
 }

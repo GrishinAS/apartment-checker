@@ -1,16 +1,12 @@
 package com.grishin.apartment.checker.service;
 
-import com.grishin.apartment.checker.config.ApartmentsConfig;
-import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.AptDTO;
 import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
 import com.grishin.apartment.checker.dto.LeaseTermDTO;
 import com.grishin.apartment.checker.storage.*;
 import com.grishin.apartment.checker.storage.entity.*;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -32,31 +28,8 @@ public class DataSyncService {
     private final UnitRepository unitRepository;
     private final UnitAmenityRepository unitAmenityRepository;
     private final LeasePriceRepository leasePriceRepository;
-    private final ApartmentsFetcherClient client;
-    private final ApartmentsConfig apartmentsConfig;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
-
-    @PostConstruct
-    public void syncApartmentData() {
-        log.info("Starting apartment data synchronization");
-        try {
-            List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments();
-
-            processApartmentData(apartmentData);
-
-            log.info("Apartment data synchronization completed successfully");
-        } catch (Exception e) {
-            log.error("Error during apartment data synchronization", e);
-        }
-    }
-
-    @Cacheable("apartments") // remove after development
-    private List<FloorPlanGroupDTO> fetchAvailableApartments() {
-        CommunityConfig community = apartmentsConfig.getCommunities().stream()
-                .filter(apt -> apt.getName().equals("Los Olivos")).findFirst().orElseThrow();
-        return client.fetchApartments(community.getCommunityId(), 10);
-    }
 
     @Transactional
     public void processApartmentData(List<FloorPlanGroupDTO> apartmentDataList) {

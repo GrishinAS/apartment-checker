@@ -16,7 +16,7 @@ logging:
 spring:
   application.name: apartment.checker
   datasource:
-    url: jdbc:h2:mem:apartmentdb
+    url: jdbc:h2:./apartmentdb
     driverClassName: org.h2.Driver
     username:
     password:
@@ -30,7 +30,7 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: update
-    show-sql: false
+    show-sql: true
     properties:
       hibernate:
         format_sql: true

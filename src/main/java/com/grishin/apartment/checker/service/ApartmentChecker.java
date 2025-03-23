@@ -9,7 +9,9 @@ import com.grishin.apartment.checker.storage.ApartmentSpecifications;
 import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.telegram.TelegramBot;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -20,25 +22,42 @@ import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class ApartmentChecker {
     private final TelegramBot bot;
     private final IrvineCompanyClient client;
     private final ApartmentsConfig apartmentsConfig;
     private final UserFilterService userFilterService;
     private final UnitRepository unitRepository;
+    private final DataSyncService dataSyncService;
 
 
-    @Scheduled(fixedRateString = "${apartments.checkInterval}")
+    @Scheduled(fixedRateString = "${apartments.checkInterval}",  initialDelayString = "${apartments.checkInterval}")
     public void checkForNewApartments() {
+        log.info("Checking for new apartments");
         // retrieve current
         List<Unit> allUnits = unitRepository.findAll();
         Set<String> existingUnitIds = allUnits.stream().map(Unit::getObjectId).collect(Collectors.toSet());
 
-        List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments();
+        List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments("Los Olivos");
         apartmentData.stream()
                 .flatMap(group -> group.getUnits().stream())
                 .filter(unit -> !existingUnitIds.contains(unit.getObjectID()))
-                .forEach(this::alertNewUnit);
+        .forEach(this::alertNewUnit);
+    }
+
+    @PostConstruct
+    public void syncApartmentData() {
+        log.info("Starting apartment data synchronization");
+        try {
+            List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments("Los Olivos");
+
+            dataSyncService.processApartmentData(apartmentData);
+
+            log.info("Apartment data synchronization completed successfully");
+        } catch (Exception e) {
+            log.error("Error during apartment data synchronization", e);
+        }
     }
 
     public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {
@@ -71,9 +90,9 @@ public class ApartmentChecker {
         bot.sendMessage(message.toString());
     }
 
-    private List<FloorPlanGroupDTO> fetchAvailableApartments() {
+    private List<FloorPlanGroupDTO> fetchAvailableApartments(String communityName) {
         CommunityConfig community = apartmentsConfig.getCommunities().stream()
-                .filter(apt -> apt.getCommunityId().equals("Los Olivos")).findFirst().orElseThrow();
+                .filter(c -> c.getName().equals(communityName)).findFirst().orElseThrow();
         return client.fetchApartments(community.getCommunityId(), 10);
     }
 }
