@@ -1,6 +1,6 @@
 package com.grishin.apartment.checker;
 
-import com.grishin.apartment.checker.telegram.BotController;
+import com.grishin.apartment.checker.telegram.MainBotController;
 import com.grishin.apartment.checker.telegram.TelegramBot;
 import jakarta.persistence.EntityManagerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,7 +32,7 @@ public class Application {
 	public TelegramBot telegramBot(
 			@Value("telegram.bot.token") String botToken,
 			@Value("telegram.bot.chatId") String chatId,
-			BotController pollingBot) throws TelegramApiException {
+			MainBotController pollingBot) throws TelegramApiException {
 		TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
 		botsApi.registerBot(pollingBot);
 		return new TelegramBot(botToken, chatId);

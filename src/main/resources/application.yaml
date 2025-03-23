@@ -18,8 +18,8 @@ spring:
   datasource:
     url: jdbc:h2:./apartmentdb
     driverClassName: org.h2.Driver
-    username:
-    password:
+    username: ${SQL_DB_USERNAME}
+    password: ${SQL_DB_PASSWORD}
 
   h2:
     console:

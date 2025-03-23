@@ -22,7 +22,7 @@ import static java.util.stream.Collectors.toCollection;
 
 @Slf4j
 @Service
-public class BotController extends TelegramLongPollingBot {
+public class MainBotController extends TelegramLongPollingBot {
     private final Map<Long, ConversationState> userStates = new HashMap<>();
     private final Map<Long, ApartmentFilter> userPreferences = new HashMap<>();
     private final Map<Long, String> selectedCommunities = new HashMap<>();
@@ -33,7 +33,7 @@ public class BotController extends TelegramLongPollingBot {
     @Value("${telegram.bot.name}")
     private String botName;
 
-    public BotController(
+    public MainBotController(
             @Value("${telegram.bot.token}") String token,
             ApartmentsConfig apartmentsConfig,
             UserFilterService userFilterService,
@@ -46,7 +46,6 @@ public class BotController extends TelegramLongPollingBot {
 
     @Override
     public void onUpdateReceived(Update update) {
-        log.info("Received update: {}", update.toString());
         try {
             if (update.hasCallbackQuery()) {
                 handleCallbackQuery(update);
@@ -64,7 +63,7 @@ public class BotController extends TelegramLongPollingBot {
             }
 
             ConversationState currentState = userStates.get(chatId);
-
+            log.info("Received message '{}' in state '{}'", messageText, currentState);
             switch (currentState) {
                 case IDLE:
                     if (messageText.equals("/start")) {
@@ -82,8 +81,19 @@ public class BotController extends TelegramLongPollingBot {
 
                 case WAITING_FOR_AMENITIES:
                     processSelectedAmenities(chatId, messageText);
-                    sendPriceRangeSlider(chatId, MIN_PRICE);
                     userStates.put(chatId, ConversationState.SETTING_MIN_PRICE);
+                    sendPriceRequest(chatId);
+                    break;
+
+                case SETTING_MIN_PRICE:
+                    processPrice(chatId, messageText);
+                    userStates.put(chatId, ConversationState.SETTING_MAX_PRICE);
+                    sendPriceRequest(chatId);
+                    break;
+                case SETTING_MAX_PRICE:
+                    processPrice(chatId, messageText);
+                    userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
+                    sendDateRangeSlider(chatId, new Date());
                     break;
 
                 case REVIEW_PREFERENCES:
@@ -115,13 +125,6 @@ public class BotController extends TelegramLongPollingBot {
             ApartmentFilter preferences = userPreferences.get(chatId);
 
             switch (action) {
-                case "min_price":
-                    handleMinPriceCallback(Integer.parseInt(parts[1]), preferences, chatId, messageId);
-                    break;
-
-                case "max_price":
-                    handleMaxPriceCallback(Integer.parseInt(parts[1]), preferences, chatId, messageId);
-                    break;
 
                 case "min_date":
                     handleMinDateCallback(new Date(Long.parseLong(parts[1])), preferences, chatId, messageId);
@@ -161,11 +164,9 @@ public class BotController extends TelegramLongPollingBot {
             showPreferencesSummary(chatId);
             userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
         } else {
-            // Update slider UI
             EditMessageText editMessage = createDateSliderMessage(chatId, messageId, dateValue, "min");
             execute(editMessage);
 
-            // Move to max date selection with min date as starting point
             Date initialMaxDate = preferences.getMaxDate();
             if (initialMaxDate == null || initialMaxDate.before(dateValue)) {
                 initialMaxDate = dateValue;
@@ -175,43 +176,40 @@ public class BotController extends TelegramLongPollingBot {
         }
     }
 
-    private void handleMaxPriceCallback(int value, ApartmentFilter preferences, long chatId, int messageId) throws TelegramApiException {
-        if (value >= MIN_PRICE) { // handle incorrect value
-            preferences.setMaxPrice(value);
-            if (value == MIN_PRICE) {
-                // If max equals min, just proceed
-                sendDateRangeSlider(chatId, new Date());
-                userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
-            } else {
-                // Update slider and move to date selection
-                EditMessageText editMessage = createPriceSliderMessage(chatId, messageId, value, "max");
-                execute(editMessage);
+    private void sendPriceRequest(long chatId) throws TelegramApiException {
+        ConversationState state = userStates.get(chatId);
+        log.info("Sending price request to chatId, state {}: {}", chatId, state);
+        String title;
+        if (state == ConversationState.SETTING_MIN_PRICE)
+            title = "Set minimum price:";
+        else if (state == ConversationState.SETTING_MAX_PRICE)
+            title = "Set maximum price:";
+        else throw new RuntimeException("Invalid state");
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(title);
 
-                sendDateRangeSlider(chatId, new Date());
-                userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
-            }
-        }
+        execute(message);
     }
 
-    private void handleMinPriceCallback(int value, ApartmentFilter preferences, long chatId, int messageId) throws TelegramApiException {
-        if (value <= MAX_PRICE) { // handle incorrect value
-            preferences.setMinPrice(value);
-            if (value == MAX_PRICE) {
-                // If min price is at max, set max price equal to it
-                preferences.setMaxPrice(MAX_PRICE);
-                sendDateRangeSlider(chatId, new Date());
-                userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
-            } else {
-                // Update slider and move to max price selection
-                EditMessageText editMessage = createPriceSliderMessage(chatId, messageId, value, "min");
-                execute(editMessage);
-
-                sendPriceRangeSlider(chatId, preferences.getMinPrice());
-                userStates.put(chatId, ConversationState.SETTING_MAX_PRICE);
-            }
+    private void processPrice(long chatId, String priceString) throws TelegramApiException {
+        int value = Integer.parseInt(priceString);
+        ConversationState state = userStates.get(chatId);
+        log.info("Processing price: {}, state: {}", value, state);
+        ApartmentFilter preferences = userPreferences.get(chatId);
+        if (value <= MAX_PRICE && value >= MIN_PRICE) {
+            if (state == ConversationState.SETTING_MIN_PRICE)
+                preferences.setMinPrice(value);
+            else if (state == ConversationState.SETTING_MAX_PRICE)
+                preferences.setMaxPrice(value);
+            else throw new RuntimeException("Invalid state");
+        } else  {
+            SendMessage message = new SendMessage();
+            message.setChatId(String.valueOf(chatId));
+            message.setText("Entered price should be between %d and %d".formatted(MIN_PRICE, MAX_PRICE));
+            sendPriceRequest(chatId);
         }
     }
-
 
     private void sendCommunitySelection(long chatId) throws TelegramApiException {
         SendMessage message = createMessageWithKeyboard(
@@ -234,19 +232,6 @@ public class BotController extends TelegramLongPollingBot {
                 "Now, please select your desired amenities (comma-separated if multiple):",
                 createKeyboardFromList(amenities)
         );
-        execute(message);
-    }
-
-    private void sendPriceRangeSlider(long chatId, int currentValue) throws TelegramApiException {
-        String title = userStates.get(chatId) == ConversationState.SETTING_MIN_PRICE ?
-                "Set minimum price:" : "Set maximum price:";
-
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(title + " " + currentValue + " $\n\n" + createPriceSliderView(currentValue));
-        message.setReplyMarkup(createPriceSliderKeyboard(currentValue,
-                userStates.get(chatId) == ConversationState.SETTING_MIN_PRICE ? "min_price" : "max_price"));
-
         execute(message);
     }
 

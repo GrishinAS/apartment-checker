@@ -9,7 +9,6 @@ import com.grishin.apartment.checker.storage.ApartmentSpecifications;
 import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.telegram.TelegramBot;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
@@ -40,13 +39,13 @@ public class ApartmentChecker {
         Set<String> existingUnitIds = allUnits.stream().map(Unit::getObjectId).collect(Collectors.toSet());
 
         List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments("Los Olivos");
-        apartmentData.stream()
+        Set<AptDTO> newApartments = apartmentData.stream()
                 .flatMap(group -> group.getUnits().stream())
-                .filter(unit -> !existingUnitIds.contains(unit.getObjectID()))
-        .forEach(this::alertNewUnit);
+                .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
+        //.forEach(this::alertNewUnit);
     }
 
-    @PostConstruct
+    //@PostConstruct
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
