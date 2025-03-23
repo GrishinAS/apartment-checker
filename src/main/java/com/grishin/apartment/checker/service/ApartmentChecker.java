@@ -51,18 +51,6 @@ public class ApartmentChecker {
         return findApartmentsWithFilters(filters);
     }
 
-    public void saveUserFilters(Long userId, ApartmentFilter filters) {
-        userFilterService.saveUserFilters(userId, filters);
-    }
-
-    public ApartmentFilter getUserFilters(Long userId) {
-        return userFilterService.getUserFilters(userId);
-    }
-
-    public void clearUserFilters(Long userId) {
-        userFilterService.clearUserFilters(userId);
-    }
-
     private void alertNewUnit(AptDTO unit) {
         StringBuilder message = new StringBuilder();
         message.append("*New Apartment Available!*\n\n");

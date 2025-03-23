@@ -1,13 +1,12 @@
-package com.grishin.apartment.checker;
+package com.grishin.apartment.checker.controller;
 
 import com.grishin.apartment.checker.service.DataSyncService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
 
-@RestController
+@org.springframework.web.bind.annotation.RestController
 @RequiredArgsConstructor
-public class Controller {
+public class RestController {
 
     private final DataSyncService dataSyncService;
 

@@ -7,6 +7,7 @@ import jakarta.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import java.sql.Date;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -21,7 +22,7 @@ public class UserFilterService {
     }
 
     @Transactional
-    public void saveUserFilters(Long userId, ApartmentFilter filters) {
+    public void saveUserFilters(Long userId, String selectedCommunity, ApartmentFilter filters) {
         Optional<UserFilterPreference> existingPreference = userFilterRepository.findByUserId(userId);
 
         UserFilterPreference preference;
@@ -43,11 +44,10 @@ public class UserFilterService {
         preference.setMaxPrice(filters.getMaxPrice());
         preference.setMinFloor(filters.getMinFloor());
         preference.setMaxFloor(filters.getMaxFloor());
-        preference.setHasStainlessAppliances(filters.getHasStainlessAppliances());
-        preference.setEarliestAvailableFrom(filters.getEarliestAvailableFrom());
-//        preference.setBuildingNumber(filters.getBuildingNumber());
-//        preference.setFloorplanName(filters.getFloorplanName());
+        preference.setAvailableFrom(new Date(filters.getMinDate().getTime()));
+        preference.setAvailableUntil(new Date(filters.getMaxDate().getTime()));
         preference.setUpdatedAt(LocalDateTime.now());
+        preference.setSelectedCommunity(selectedCommunity);
 
         userFilterRepository.save(preference);
     }
@@ -68,15 +68,12 @@ public class UserFilterService {
             filterDTO.setMaxPrice(userPref.getMaxPrice());
             filterDTO.setMinFloor(userPref.getMinFloor());
             filterDTO.setMaxFloor(userPref.getMaxFloor());
-            filterDTO.setHasStainlessAppliances(userPref.getHasStainlessAppliances());
-            filterDTO.setEarliestAvailableFrom(userPref.getEarliestAvailableFrom());
-//            filterDTO.setBuildingNumber(userPref.getBuildingNumber());
-//            filterDTO.setFloorplanName(userPref.getFloorplanName());
+            filterDTO.setMinDate(userPref.getAvailableFrom());
+            filterDTO.setMaxDate(userPref.getAvailableUntil());
 
             return filterDTO;
         }
 
-        // Return empty filter if no preferences found
         return new ApartmentFilter();
     }
 

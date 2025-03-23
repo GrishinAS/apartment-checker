@@ -2,17 +2,21 @@ package com.grishin.apartment.checker.dto;
 
 import lombok.Data;
 
+import java.util.Date;
+import java.util.List;
+
 @Data
 public class ApartmentFilter {
     private Boolean isStudio;
     private Integer minBedrooms;
     private Integer maxBedrooms;
-    private Double minBathrooms;
-    private Double maxBathrooms;
-    private Double minPrice;
-    private Double maxPrice;
+    private Integer minBathrooms;
+    private Integer maxBathrooms;
+    private Integer minPrice;
+    private Integer maxPrice;
     private Integer minFloor;
     private Integer maxFloor;
-    private Boolean hasStainlessAppliances;
-    private String earliestAvailableFrom;
+    private List<String> amenities;
+    private Date minDate;
+    private Date maxDate;
 }

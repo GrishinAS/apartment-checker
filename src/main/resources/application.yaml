@@ -29,8 +29,13 @@ spring:
   jpa:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: create-drop
+      ddl-auto: update
     show-sql: false
     properties:
       hibernate:
         format_sql: true
+
+telegram.bot:
+  name: Irvine Company Apartment Checker Bot
+  token: 1234567890:ABCDEFghijklmnopqrstuvwxyz1234567890
+  chatId: XXXXXXXXXX
