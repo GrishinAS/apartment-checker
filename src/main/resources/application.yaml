@@ -37,5 +37,3 @@ spring:
 
 telegram.bot:
   name: Irvine Company Apartment Checker Bot
-  token: 1234567890:ABCDEFghijklmnopqrstuvwxyz1234567890
-  chatId: XXXXXXXXXX

@@ -50,7 +50,7 @@ public class Unit {
     @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     @JoinTable(
             name = "unit_amenity_mappings",
-            joinColumns = @JoinColumn(name = "objectId"),
+            joinColumns = @JoinColumn(name = "object_id"),
             inverseJoinColumns = @JoinColumn(name = "amenity_id")
     )
     private Set<UnitAmenity> amenities = new HashSet<>();

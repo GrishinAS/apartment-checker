@@ -42,7 +42,7 @@ public class ApartmentChecker {
     }
 
     public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {
-        Specification<Unit> spec = ApartmentSpecifications.withFilters(filters);
+        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters);
         return unitRepository.findAll(spec);
     }
 

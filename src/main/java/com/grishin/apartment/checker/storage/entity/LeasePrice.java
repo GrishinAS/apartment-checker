@@ -28,6 +28,6 @@ public class LeasePrice {
     private Boolean isStartingPrice;
 
     @ManyToOne
-    @JoinColumn(name = "objectId")
+    @JoinColumn(name = "object_id")
     private Unit unit;
 }

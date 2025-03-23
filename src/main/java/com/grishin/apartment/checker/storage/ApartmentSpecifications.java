@@ -1,117 +1,94 @@
 package com.grishin.apartment.checker.storage;
 
 import com.grishin.apartment.checker.dto.ApartmentFilter;
+import com.grishin.apartment.checker.storage.entity.FloorPlan;
+import com.grishin.apartment.checker.storage.entity.LeasePrice;
 import com.grishin.apartment.checker.storage.entity.Unit;
+import com.grishin.apartment.checker.storage.entity.UnitAmenity;
+import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
 
 public class ApartmentSpecifications {
 
-    public static Specification<Unit> withFilters(ApartmentFilter filters) {
-        return Specification
-                .where(isStudioEquals(filters.getIsStudio()))
-                .and(bedroomsBetween(filters.getMinBedrooms(), filters.getMaxBedrooms()))
-                .and(bathroomsBetween(filters.getMinBathrooms(), filters.getMaxBathrooms()))
-                .and(priceBetween(filters.getMinPrice(), filters.getMaxPrice()))
-                .and(floorBetween(filters.getMinFloor(), filters.getMaxFloor()))
-                .and(hasStainlessAppliancesEquals(filters.getHasStainlessAppliances()))
-                .and(availableFrom(filters.getEarliestAvailableFrom()));
-    }
+    public static Specification<Unit> filterBy(ApartmentFilter filter) {
+        return (root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
 
-    private static Specification<Unit> isStudioEquals(Boolean isStudio) {
-        return (isStudio == null) ? null : (root, query, cb) ->
-                cb.equal(root.get("isStudio"), isStudio);
-    }
+            query.distinct(true);
 
-    private static Specification<Unit> bedroomsBetween(Integer min, Integer max) {
-        if (min == null && max == null) return null;
+            Join<Unit, FloorPlan> floorPlanJoin = root.join("floorPlan", JoinType.LEFT);
+            Join<Unit, LeasePrice> leasePriceJoin = root.join("leasePrices", JoinType.LEFT);
 
-        return (root, query, cb) -> {
-            if (min != null && max != null) {
-                return cb.between(root.get("floorplanBed"), min, max);
-            } else if (min != null) {
-                return cb.greaterThanOrEqualTo(root.get("floorplanBed"), min);
-            } else {
-                return cb.lessThanOrEqualTo(root.get("floorplanBed"), max);
+            if (filter.getIsStudio() != null) {
+                predicates.add(criteriaBuilder.equal(root.get("unitIsStudio"), filter.getIsStudio()));
             }
-        };
-    }
 
-    private static Specification<Unit> bathroomsBetween(Double min, Double max) {
-        if (min == null && max == null) return null;
-
-        return (root, query, cb) -> {
-            if (min != null && max != null) {
-                return cb.between(root.get("floorplanBath"), min, max);
-            } else if (min != null) {
-                return cb.greaterThanOrEqualTo(root.get("floorplanBath"), min);
-            } else {
-                return cb.lessThanOrEqualTo(root.get("floorplanBath"), max);
+            if (filter.getMinBedrooms() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(floorPlanJoin.get("floorPlanBed"), filter.getMinBedrooms()));
             }
-        };
-    }
 
-    private static Specification<Unit> priceBetween(Double min, Double max) {
-        if (min == null && max == null) return null;
-
-        return (root, query, cb) -> {
-            if (min != null && max != null) {
-                return cb.between(root.get("price"), min, max);
-            } else if (min != null) {
-                return cb.greaterThanOrEqualTo(root.get("price"), min);
-            } else {
-                return cb.lessThanOrEqualTo(root.get("price"), max);
+            if (filter.getMaxBedrooms() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(floorPlanJoin.get("floorPlanBed"), filter.getMaxBedrooms()));
             }
-        };
-    }
 
-    private static Specification<Unit> floorBetween(Integer min, Integer max) {
-        if (min == null && max == null) return null;
-
-        return (root, query, cb) -> {
-            if (min != null && max != null) {
-                return cb.between(root.get("unitFloor"), min, max);
-            } else if (min != null) {
-                return cb.greaterThanOrEqualTo(root.get("unitFloor"), min);
-            } else {
-                return cb.lessThanOrEqualTo(root.get("unitFloor"), max);
+            if (filter.getMinBathrooms() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(floorPlanJoin.get("floorPlanBath"), filter.getMinBathrooms()));
             }
-        };
-    }
 
-    private static Specification<Unit> hasStainlessAppliancesEquals(Boolean hasStainlessAppliances) {
-        return (hasStainlessAppliances == null) ? null : (root, query, cb) ->
-                cb.equal(root.get("hasStainlessAppliances"), hasStainlessAppliances);
-    }
-
-    private static Specification<Unit> availableFrom(String earliestAvailableFrom) {
-        if (earliestAvailableFrom == null || earliestAvailableFrom.isEmpty()) return null;
-
-        return (root, query, cb) -> {
-            try {
-                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-                LocalDate availableDate = LocalDate.parse(earliestAvailableFrom, formatter);
-                return cb.greaterThanOrEqualTo(root.get("unitEarliestAvailable"), availableDate);
-            } catch (Exception e) {
-                // If date parsing fails, ignore this filter
-                return cb.conjunction();
+            if (filter.getMaxBathrooms() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(floorPlanJoin.get("floorPlanBath"), filter.getMaxBathrooms()));
             }
+
+            if (filter.getMinPrice() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(leasePriceJoin.get("price"), filter.getMinPrice()));
+            }
+
+            if (filter.getMaxPrice() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(leasePriceJoin.get("price"), filter.getMaxPrice()));
+            }
+
+            if (filter.getMinFloor() != null) {
+                predicates.add(criteriaBuilder.greaterThanOrEqualTo(root.get("unitFloor"), filter.getMinFloor()));
+            }
+
+            if (filter.getMaxFloor() != null) {
+                predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("unitFloor"), filter.getMaxFloor()));
+            }
+
+            if (filter.getAmenities() != null && !filter.getAmenities().isEmpty()) {
+                Join<Unit, UnitAmenity> amenityJoin = root.join("amenities", JoinType.INNER);
+
+                Predicate amenitiesPredicate = amenityJoin.get("amenityName").in(filter.getAmenities());
+
+                Subquery<Long> amenityCountSubquery = query.subquery(Long.class);
+                Root<Unit> subRoot = amenityCountSubquery.from(Unit.class);
+                Join<Unit, UnitAmenity> subAmenityJoin = subRoot.join("amenities", JoinType.INNER);
+
+                amenityCountSubquery.select(criteriaBuilder.count(subAmenityJoin.get("id")));
+                amenityCountSubquery.where(
+                        criteriaBuilder.and(
+                                criteriaBuilder.equal(subRoot.get("objectId"), root.get("objectId")),
+                                subAmenityJoin.get("amenityName").in(filter.getAmenities())
+                        )
+                );
+
+                predicates.add(criteriaBuilder.equal(amenityCountSubquery, (long) filter.getAmenities().size()));
+            }
+
+            if (filter.getMinDate() != null || filter.getMaxDate() != null) {
+                if (filter.getMinDate() != null) {
+                    predicates.add(criteriaBuilder.greaterThanOrEqualTo(leasePriceJoin.get("availableDate"), filter.getMinDate()));
+                }
+
+                if (filter.getMaxDate() != null) {
+                    predicates.add(criteriaBuilder.lessThanOrEqualTo(leasePriceJoin.get("availableDate"), filter.getMaxDate()));
+                }
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
         };
-    }
-
-    private static Specification<Unit> buildingNumberEquals(String buildingNumber) {
-        if (buildingNumber == null || buildingNumber.isEmpty()) return null;
-
-        return (root, query, cb) ->
-                cb.equal(root.get("buildingNumber"), buildingNumber);
-    }
-
-    private static Specification<Unit> floorplanNameContains(String floorplanName) {
-        if (floorplanName == null || floorplanName.isEmpty()) return null;
-
-        return (root, query, cb) ->
-                cb.like(cb.lower(root.get("floorplanName")), "%" + floorplanName.toLowerCase() + "%");
     }
 }
