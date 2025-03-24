@@ -1,24 +1,44 @@
 package com.grishin.apartment.checker.service;
 
 import com.grishin.apartment.checker.dto.ApartmentFilter;
+import com.grishin.apartment.checker.storage.ApartmentSpecifications;
+import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
+import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import jakarta.transaction.Transactional;
+import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 
 import java.sql.Date;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.Optional;
 
 @Service
 public class UserFilterService {
 
     private final UserFilterPreferenceRepository userFilterRepository;
+    private final UnitRepository unitRepository;
 
     @Autowired
-    public UserFilterService(UserFilterPreferenceRepository userFilterRepository) {
+    public UserFilterService(
+            UserFilterPreferenceRepository userFilterRepository,
+            UnitRepository unitRepository) {
         this.userFilterRepository = userFilterRepository;
+        this.unitRepository = unitRepository;
+    }
+
+    @Transactional
+    public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {
+        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters);
+        List<Unit> units = unitRepository.findAll(spec);
+        for (Unit unit : units) {
+            Hibernate.initialize(unit.getAmenities());
+        }
+        return units;
     }
 
     @Transactional

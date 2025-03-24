@@ -4,9 +4,7 @@ import com.grishin.apartment.checker.config.ApartmentsConfig;
 import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.ApartmentFilter;
 import com.grishin.apartment.checker.service.UserFilterService;
-import com.grishin.apartment.checker.storage.ApartmentSpecifications;
 import com.grishin.apartment.checker.storage.UnitAmenityRepository;
-import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UnitAmenity;
 import io.github.dostonhamrakulov.InlineCalendarBuilder;
@@ -15,8 +13,8 @@ import io.github.dostonhamrakulov.LanguageEnum;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
@@ -50,7 +48,6 @@ public class MainBotController extends TelegramLongPollingBot {
     private final ApartmentsConfig apartmentsConfig;
     private final UserFilterService userFilterService;
     private final UnitAmenityRepository unitAmenityRepository;
-    private final UnitRepository unitRepository;
 
     private final InlineCalendarBuilder inlineCalendarBuilder = new InlineCalendarBuilder(LanguageEnum.EN);
 
@@ -61,13 +58,11 @@ public class MainBotController extends TelegramLongPollingBot {
             @Value("${telegram.bot.token}") String token,
             ApartmentsConfig apartmentsConfig,
             UserFilterService userFilterService,
-            UnitAmenityRepository unitAmenityRepository,
-            UnitRepository unitRepository) {
+            UnitAmenityRepository unitAmenityRepository) {
         super(token);
         this.apartmentsConfig = apartmentsConfig;
         this.userFilterService = userFilterService;
         this.unitAmenityRepository = unitAmenityRepository;
-        this.unitRepository = unitRepository;
     }
 
     @PostConstruct
@@ -180,10 +175,6 @@ public class MainBotController extends TelegramLongPollingBot {
         }
     }
 
-    public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {
-        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters);
-        return unitRepository.findAll(spec);
-    }
 
     private void sendApartmentList(long chatId) throws TelegramApiException {
         int currentPage = userPages.getOrDefault(chatId, 0);
@@ -192,7 +183,7 @@ public class MainBotController extends TelegramLongPollingBot {
             sendMessage(chatId, "You don't have any preferences set. Please use /start to set them.");
             return;
         }
-        List<Unit> allApartments = findApartmentsWithFilters(filters);
+        List<Unit> allApartments = userFilterService.findApartmentsWithFilters(filters);
 
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
@@ -203,6 +194,7 @@ public class MainBotController extends TelegramLongPollingBot {
         execute(message);
     }
 
+    @Transactional
     private void updateApartmentList(long chatId, int messageId) throws TelegramApiException {
         int currentPage = userPages.getOrDefault(chatId, 0);
         ApartmentFilter filters = userFilterService.getUserFilters(chatId);
@@ -210,7 +202,7 @@ public class MainBotController extends TelegramLongPollingBot {
             sendMessage(chatId, "You don't have any preferences set. Please use /start to set them.");
             return;
         }
-        List<Unit> apartmentsForUser = findApartmentsWithFilters(filters);
+        List<Unit> apartmentsForUser = userFilterService.findApartmentsWithFilters(filters);
 
         EditMessageText editMessage = new EditMessageText();
         editMessage.setChatId(String.valueOf(chatId));

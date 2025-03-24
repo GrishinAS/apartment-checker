@@ -11,7 +11,6 @@ import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import com.grishin.apartment.checker.telegram.MainBotController;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
@@ -79,7 +78,7 @@ public class ApartmentChecker {
         }
     }
 
-    @PostConstruct
+    //@PostConstruct
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
