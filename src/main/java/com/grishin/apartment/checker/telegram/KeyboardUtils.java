@@ -17,7 +17,6 @@ public class KeyboardUtils {
     public static final int MAX_DATE_RANGE_DAYS = 90;
     public static final int MIN_PRICE = 2000;
     public static final int MAX_PRICE = 5000;
-    public static final int PRICE_STEP = 100;
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd-MM-yyyy");
 
     public static InlineKeyboardMarkup generateApartmentListKeyboard(List<Unit> apartments, int page) {
@@ -70,7 +69,7 @@ public class KeyboardUtils {
         message.append("Price: $").append(unit.getUnitEarliestAvailable().getPrice()).append("\n");
         message.append("Floorplan: ").append(unit.getFloorPlan().getFloorPlanName()).append("\n");
         message.append("Amenities: ");
-        unit.getAmenities().forEach(amenity -> message.append(amenity.getAmenityName()).append("\n"));
+        unit.getAmenities().forEach(amenity -> message.append(amenity.getAmenityName()).append("\n")); // todo fails here with lazy initialization
         message.append("Available From: ").append(unit.getUnitEarliestAvailable().getAvailableDate());
 
         return message.toString();

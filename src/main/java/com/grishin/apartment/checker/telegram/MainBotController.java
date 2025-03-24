@@ -304,7 +304,7 @@ public class MainBotController extends TelegramLongPollingBot {
         LocalDate minDate = savedMinDate.toInstant()
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();
-        LocalDate maxPossibleDate = LocalDate.now().plusDays(90);
+        LocalDate maxPossibleDate = LocalDate.now().plusDays(MAX_DATE_RANGE_DAYS);
         if (enteredDate.isAfter(minDate) && enteredDate.isBefore(maxPossibleDate)) {
             log.info("Setting max date to {}", dateValue);
             preferences.setMaxDate(dateValue);
@@ -323,7 +323,7 @@ public class MainBotController extends TelegramLongPollingBot {
                 .atZone(ZoneId.systemDefault())
                 .toLocalDate();
         LocalDate today = LocalDate.now();
-        LocalDate maxPossibleDate = today.plusDays(90);
+        LocalDate maxPossibleDate = today.plusDays(MAX_DATE_RANGE_DAYS);
         if (enteredDate.isAfter(today) && enteredDate.isBefore(maxPossibleDate)) {
             log.info("Setting min date to {}", dateValue);
             preferences.setMinDate(dateValue);
@@ -456,8 +456,8 @@ public class MainBotController extends TelegramLongPollingBot {
 
         summaryMessage.append("💰 Price Range: ").append(prefs.getMinPrice()).append(" - ").append(prefs.getMaxPrice()).append(" ₽\n\n");
 
-        Date minDate = Calendar.getInstance().getTime();
-        Date maxDate = Calendar.getInstance().getTime();
+        Date minDate = prefs.getMinDate();
+        Date maxDate = prefs.getMaxDate();
         summaryMessage.append("📅 Date Range: ").append(formatDate(minDate)).append(" - ").append(formatDate(maxDate)).append("\n\n");
 
         summaryMessage.append("Is this correct? Press 'confirm' to save or 'restart' to begin again.");

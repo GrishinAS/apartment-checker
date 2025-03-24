@@ -83,10 +83,14 @@ public class ApartmentChecker {
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
-            List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments("Los Olivos");
+            List<String> communities = apartmentsConfig.getCommunities()
+                    .stream().map(CommunityConfig::getName).toList();
+            for (String communityName : communities) {
+                List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments(communityName);
 
-            dataSyncService.processApartmentData(apartmentData);
-
+                dataSyncService.processApartmentData(apartmentData);
+                log.info("Synchronized apartment data for community {}", communityName);
+            }
             log.info("Apartment data synchronization completed successfully");
         } catch (Exception e) {
             log.error("Error during apartment data synchronization", e);
