@@ -4,24 +4,36 @@ import com.grishin.apartment.checker.config.ApartmentsConfig;
 import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.ApartmentFilter;
 import com.grishin.apartment.checker.service.UserFilterService;
+import com.grishin.apartment.checker.storage.ApartmentSpecifications;
 import com.grishin.apartment.checker.storage.UnitAmenityRepository;
+import com.grishin.apartment.checker.storage.UnitRepository;
+import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UnitAmenity;
 import io.github.dostonhamrakulov.InlineCalendarBuilder;
 import io.github.dostonhamrakulov.InlineCalendarCommandUtil;
 import io.github.dostonhamrakulov.LanguageEnum;
+import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.bots.TelegramLongPollingBot;
+import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
+import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageText;
 import org.telegram.telegrambots.meta.api.objects.Message;
 import org.telegram.telegrambots.meta.api.objects.Update;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
+import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 
 import java.text.ParseException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.grishin.apartment.checker.telegram.KeyboardUtils.*;
 import static java.util.stream.Collectors.toCollection;
@@ -32,11 +44,15 @@ public class MainBotController extends TelegramLongPollingBot {
     private final Map<Long, ConversationState> userStates = new HashMap<>();
     private final Map<Long, ApartmentFilter> userPreferences = new HashMap<>();
     private final Map<Long, String> selectedCommunities = new HashMap<>();
+    private final Map<Long, Set<String>> userSelections = new ConcurrentHashMap<>();
+    private final Map<Long, Integer> userPages = new ConcurrentHashMap<>();
+
     private final ApartmentsConfig apartmentsConfig;
     private final UserFilterService userFilterService;
     private final UnitAmenityRepository unitAmenityRepository;
+    private final UnitRepository unitRepository;
 
-    InlineCalendarBuilder inlineCalendarBuilder = new InlineCalendarBuilder(LanguageEnum.EN);
+    private final InlineCalendarBuilder inlineCalendarBuilder = new InlineCalendarBuilder(LanguageEnum.EN);
 
     @Value("${telegram.bot.name}")
     private String botName;
@@ -45,11 +61,19 @@ public class MainBotController extends TelegramLongPollingBot {
             @Value("${telegram.bot.token}") String token,
             ApartmentsConfig apartmentsConfig,
             UserFilterService userFilterService,
-            UnitAmenityRepository unitAmenityRepository) {
+            UnitAmenityRepository unitAmenityRepository,
+            UnitRepository unitRepository) {
         super(token);
         this.apartmentsConfig = apartmentsConfig;
         this.userFilterService = userFilterService;
         this.unitAmenityRepository = unitAmenityRepository;
+        this.unitRepository = unitRepository;
+    }
+
+    @PostConstruct
+    public void register() throws TelegramApiException {
+        TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
+        botsApi.registerBot(this);
     }
 
     @Override
@@ -59,16 +83,14 @@ public class MainBotController extends TelegramLongPollingBot {
                 handleCallbackQuery(update);
                 return;
             }
-            if (!update.hasMessage() || !update.getMessage().hasText()) {
+            if (!update.hasMessage() || !update.getMessage().hasText())
                 return;
-            }
 
             long chatId = update.getMessage().getChatId();
             String messageText = update.getMessage().getText();
 
-            if (!userStates.containsKey(chatId)) {
+            if (!userStates.containsKey(chatId))
                 userStates.put(chatId, ConversationState.IDLE);
-            }
 
             ConversationState currentState = userStates.get(chatId);
             log.info("Received message '{}' in state '{}'", messageText, currentState);
@@ -78,6 +100,8 @@ public class MainBotController extends TelegramLongPollingBot {
                         sendCommunitySelection(chatId);
                         userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
                         userPreferences.put(chatId, new ApartmentFilter());
+                    } else if (messageText.equals("/getCurrentAvailable")) {
+                        sendApartmentList(chatId);
                     }
                     break;
 
@@ -87,16 +111,11 @@ public class MainBotController extends TelegramLongPollingBot {
                     userStates.put(chatId, ConversationState.WAITING_FOR_AMENITIES);
                     break;
 
-                case WAITING_FOR_AMENITIES:
-                    processSelectedAmenities(chatId, messageText);
-                    userStates.put(chatId, ConversationState.SETTING_MIN_PRICE);
-                    sendPriceRequest(chatId);
-                    break;
-
                 case SETTING_MIN_PRICE:
                     processPrice(chatId, messageText);
                     sendPriceRequest(chatId);
                     break;
+
                 case SETTING_MAX_PRICE:
                     processPrice(chatId, messageText);
                     sendDateRangeSlider(chatId, update);
@@ -119,45 +138,160 @@ public class MainBotController extends TelegramLongPollingBot {
         }
     }
 
+    public void sendMessage(long chatId, String text) throws TelegramApiException {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.setChatId(String.valueOf(chatId));
+        sendMessage.setText(text);
+        execute(sendMessage);
+    }
+
     private void handleCallbackQuery(Update update) {
         try {
             String callbackData = update.getCallbackQuery().getData();
             long chatId = update.getCallbackQuery().getMessage().getChatId();
+            int messageId = update.getCallbackQuery().getMessage().getMessageId();
 
             String[] parts = callbackData.split(":");
-
-            if (!parts[1].equals("DATE")) {
-                if (InlineCalendarCommandUtil.isCalendarIgnoreButtonClicked(update)) {
-                    return;
-                }
-                if (InlineCalendarCommandUtil.isCalendarNavigationButtonClicked(update)) {
-                    SendMessage sendMessage = new SendMessage();
-                    sendMessage.setChatId(String.valueOf(chatId));
-                    if (update.getCallbackQuery().getMessage() instanceof Message message)
-                        sendMessage.setText(message.getText());
-                    else
-                        sendMessage.setText("");
-                    sendMessage.setReplyMarkup(inlineCalendarBuilder.build(update));
-                    execute(sendMessage);
-                    return;
-                }
-            }
-            Date chosenDate = DATE_FORMAT.parse(parts[2]);
-
-            ConversationState state = userStates.get(chatId);
-            log.info("Received callback query with data '{}', state: {}", callbackData, state);
-            switch (state) {
-                case SETTING_MIN_DATE:
-                    handleMinDateCallback(chosenDate, chatId, update);
+            switch (parts[0]) {
+                case "select":
+                    String option = callbackData.substring(7);
+                    toggleSelection(chatId, option);
+                    updateKeyboard(chatId, messageId);
                     break;
-
-                case SETTING_MAX_DATE:
-                    handleMaxDateCallback(chosenDate, chatId, update);
+                case "selection.done":
+                    List<String> selectedAmenities = userSelections.remove(chatId).stream().toList();
+                    userPreferences.get(chatId).setAmenities(selectedAmenities);
+                    userStates.put(chatId, ConversationState.SETTING_MIN_PRICE);
+                    sendPriceRequest(chatId);
+                    break;
+                case "CAL_CM":
+                    handleCalendarUpdate(update, parts, chatId, callbackData);
+                    break;
+                case "page:":
+                    int page = Integer.parseInt(callbackData.substring(5));
+                    userPages.put(chatId, page);
+                    updateApartmentList(chatId, messageId);
                     break;
             }
+
         } catch (NumberFormatException | TelegramApiException | ParseException e) {
             log.error("Error handling callback query", e);
             throw new RuntimeException(e);
+        }
+    }
+
+    public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {
+        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters);
+        return unitRepository.findAll(spec);
+    }
+
+    private void sendApartmentList(long chatId) throws TelegramApiException {
+        int currentPage = userPages.getOrDefault(chatId, 0);
+        ApartmentFilter filters = userFilterService.getUserFilters(chatId);
+        if (filters == null) {
+            sendMessage(chatId, "You don't have any preferences set. Please use /start to set them.");
+            return;
+        }
+        List<Unit> allApartments = findApartmentsWithFilters(filters);
+
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(generateApartmentListText(allApartments, currentPage));
+        message.setReplyMarkup(generateApartmentListKeyboard(allApartments, currentPage));
+        message.enableHtml(true);
+
+        execute(message);
+    }
+
+    private void updateApartmentList(long chatId, int messageId) throws TelegramApiException {
+        int currentPage = userPages.getOrDefault(chatId, 0);
+        ApartmentFilter filters = userFilterService.getUserFilters(chatId);
+        if (filters == null) {
+            sendMessage(chatId, "You don't have any preferences set. Please use /start to set them.");
+            return;
+        }
+        List<Unit> apartmentsForUser = findApartmentsWithFilters(filters);
+
+        EditMessageText editMessage = new EditMessageText();
+        editMessage.setChatId(String.valueOf(chatId));
+        editMessage.setMessageId(messageId);
+        editMessage.setText(generateApartmentListText(apartmentsForUser, currentPage));
+        editMessage.setReplyMarkup(generateApartmentListKeyboard(apartmentsForUser, currentPage));
+        editMessage.enableHtml(true);
+
+        execute(editMessage);
+    }
+
+    private String generateApartmentListText(List<Unit> apartments, int page) {
+        int pageSize = 10;
+        int totalPages = (int) Math.ceil((double) apartments.size() / pageSize);
+        int startIndex = page * pageSize;
+        int endIndex = Math.min(startIndex + pageSize, apartments.size());
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("<b>Available Apartments</b> (Page ").append(page + 1).append(" of ").append(totalPages).append(")\n\n");
+
+        if (startIndex >= apartments.size()) {
+            sb.append("No apartments to display on this page.");
+            return sb.toString();
+        }
+
+        for (int i = startIndex; i < endIndex; i++) {
+            Unit apt = apartments.get(i);
+            sb.append(alertAvailableUnitMessage(apt));
+        }
+
+        return sb.toString();
+    }
+
+    private void toggleSelection(long chatId, String option) {
+        Set<String> selections = userSelections.computeIfAbsent(chatId, k -> new HashSet<>());
+
+        if (selections.contains(option)) {
+            selections.remove(option);
+        } else {
+            selections.add(option);
+        }
+    }
+
+    private void updateKeyboard(long chatId, int messageId) throws TelegramApiException {
+        EditMessageReplyMarkup editMarkup = new EditMessageReplyMarkup();
+        editMarkup.setChatId(String.valueOf(chatId));
+        editMarkup.setMessageId(messageId);
+        editMarkup.setReplyMarkup(generateSelectionKeyboard(chatId));
+
+        execute(editMarkup);
+    }
+
+    private void handleCalendarUpdate(Update update, String[] parts, long chatId, String callbackData) throws TelegramApiException, ParseException {
+        if (!parts[1].equals("DATE")) {
+            if (InlineCalendarCommandUtil.isCalendarIgnoreButtonClicked(update)) {
+                return;
+            }
+            if (InlineCalendarCommandUtil.isCalendarNavigationButtonClicked(update)) {
+                SendMessage sendMessage = new SendMessage();
+                sendMessage.setChatId(String.valueOf(chatId));
+                if (update.getCallbackQuery().getMessage() instanceof Message message)
+                    sendMessage.setText(message.getText());
+                else
+                    sendMessage.setText("");
+                sendMessage.setReplyMarkup(inlineCalendarBuilder.build(update));
+                execute(sendMessage);
+                return;
+            }
+        }
+        Date chosenDate = DATE_FORMAT.parse(parts[2]);
+
+        ConversationState state = userStates.get(chatId);
+        log.info("Received callback query with data '{}', state: {}", callbackData, state);
+        switch (state) {
+            case SETTING_MIN_DATE:
+                handleMinDateCallback(chosenDate, chatId, update);
+                break;
+
+            case SETTING_MAX_DATE:
+                handleMaxDateCallback(chosenDate, chatId, update);
+                break;
         }
     }
 
@@ -178,10 +312,7 @@ public class MainBotController extends TelegramLongPollingBot {
             showPreferencesSummary(chatId);
         } else {
             log.warn("Incorrect max date chosen: {}, another try", dateValue);
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText("Entered date should be between minimum date and three months from today");
-            execute(message);
+            sendMessage(chatId, "Entered date should be between minimum date and three months from today");
             sendDateRangeSlider(chatId, update);
         }
     }
@@ -200,28 +331,21 @@ public class MainBotController extends TelegramLongPollingBot {
             sendDateRangeSlider(chatId, update);
         } else {
             log.warn("Incorrect min date chosen: {}, another try", dateValue);
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText("Entered date should be between today and three months from today");
-            execute(message);
+            sendMessage(chatId, "Entered date should be between today and three months from today");
             sendDateRangeSlider(chatId, update);
         }
     }
 
     private void sendPriceRequest(long chatId) throws TelegramApiException {
         ConversationState state = userStates.get(chatId);
-        log.info("Sending price request to chatId, state {}: {}", chatId, state);
+        log.info("Sending price request to chatId: {} state : {}", chatId, state);
         String title;
         if (state == ConversationState.SETTING_MIN_PRICE)
             title = "Set minimum price:";
         else if (state == ConversationState.SETTING_MAX_PRICE)
             title = "Set maximum price:";
         else throw new RuntimeException("Invalid state");
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText(title);
-
-        execute(message);
+        sendMessage(chatId, title);
     }
 
     private void processPrice(long chatId, String priceString) throws TelegramApiException {
@@ -231,10 +355,7 @@ public class MainBotController extends TelegramLongPollingBot {
         ApartmentFilter preferences = userPreferences.get(chatId);
         if (value > MAX_PRICE || value < MIN_PRICE) {
             log.warn("Incorrect price chosen: {}, another try", priceString);
-            SendMessage message = new SendMessage();
-            message.setChatId(String.valueOf(chatId));
-            message.setText("Entered price should be between %d and %d".formatted(MIN_PRICE, MAX_PRICE));
-            execute(message);
+            sendMessage(chatId, "Entered price should be between %d and %d".formatted(MIN_PRICE, MAX_PRICE));
             sendPriceRequest(chatId);
             return;
         }
@@ -252,27 +373,58 @@ public class MainBotController extends TelegramLongPollingBot {
     }
 
     private void sendCommunitySelection(long chatId) throws TelegramApiException {
+        List<String> communities = apartmentsConfig.getCommunities().stream().map(CommunityConfig::getName).toList();
         SendMessage message = createMessageWithKeyboard(
                 chatId,
                 "Please select your preferred community:",
-                createKeyboardFromList(apartmentsConfig.getCommunities().stream().map(CommunityConfig::getName).toList())
+                createKeyboardFromList(communities)
         );
         execute(message);
+    }
+
+    private void sendAmenitiesOptions(long chatId) throws TelegramApiException {
+        userSelections.put(chatId, new HashSet<>());
+
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText("Please select one or more options:");
+        message.setReplyMarkup(generateSelectionKeyboard(chatId));
+        execute(message);
+    }
+
+    private InlineKeyboardMarkup generateSelectionKeyboard(long userId) {
+        Set<String> selections = userSelections.getOrDefault(userId, new HashSet<>());
+        List<String> amenities = unitAmenityRepository.findAll().stream()
+                .map(UnitAmenity::getAmenityName).collect(toCollection(ArrayList::new));
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+
+        for (String option : amenities) {
+            InlineKeyboardButton button = new InlineKeyboardButton();
+
+            String text = selections.contains(option) ? "✅ " + option : "⬜️ " + option;
+            button.setText(text);
+            button.setCallbackData("select:" + option);
+
+            List<InlineKeyboardButton> row = new ArrayList<>();
+            row.add(button);
+            keyboard.add(row);
+        }
+
+        InlineKeyboardButton doneButton = new InlineKeyboardButton();
+        doneButton.setText("Done ✓");
+        doneButton.setCallbackData("selection.done");
+
+        List<InlineKeyboardButton> doneRow = new ArrayList<>();
+        doneRow.add(doneButton);
+        keyboard.add(doneRow);
+
+        markup.setKeyboard(keyboard);
+        return markup;
     }
 
     private void processSelectedCommunity(long chatId, String selectedCommunity) {
         selectedCommunities.put(chatId, selectedCommunity);
-    }
-
-    private void sendAmenitiesOptions(long chatId) throws TelegramApiException {
-        List<String> amenities = unitAmenityRepository.findAll().stream()
-                .map(UnitAmenity::getAmenityName).collect(toCollection(ArrayList::new));
-        SendMessage message = createMessageWithKeyboard(
-                chatId,
-                "Now, please select your desired amenities (comma-separated if multiple):",
-                createKeyboardFromList(amenities)
-        );
-        execute(message);
     }
 
     public void sendDateRangeSlider(long chatId, Update update) throws TelegramApiException {
@@ -308,38 +460,31 @@ public class MainBotController extends TelegramLongPollingBot {
         Date maxDate = Calendar.getInstance().getTime();
         summaryMessage.append("📅 Date Range: ").append(formatDate(minDate)).append(" - ").append(formatDate(maxDate)).append("\n\n");
 
-        summaryMessage.append("Is this correct? Type 'confirm' to save or 'restart' to begin again.");
+        summaryMessage.append("Is this correct? Press 'confirm' to save or 'restart' to begin again.");
         SendMessage message = createMessageWithKeyboard(
                 chatId,
-                "Is this correct? Press 'confirm' to save or 'restart' to begin again.",
+                summaryMessage.toString(),
                 createKeyboardFromList(List.of("Confirm", "Restart"))
         );
         execute(message);
     }
 
-    private void processSelectedAmenities(long chatId, String amenitiesText) {
-        List<String> selectedAmenities = Arrays.asList(amenitiesText.split(",\\s*"));
-        userPreferences.get(chatId).setAmenities(selectedAmenities);
-    }
-
     private void sendFinalConfirmation(long chatId) throws TelegramApiException {
-        SendMessage message = new SendMessage();
-        message.setChatId(String.valueOf(chatId));
-        message.setText("✅ Your preferences have been saved! You will receive updates based on your criteria.\n\nType /start to set new preferences anytime.");
-
-        execute(message);
+        String message = """
+                ✅ Your preferences have been saved! You will receive updates based on your criteria.
+                
+                Type /start to set new preferences anytime or /getCurrentAvailable if you want to see current available apartments by your criteria.""";
+        sendMessage(chatId, message);
     }
 
     private void saveUserPreferences(long chatId) {
-        ApartmentFilter gatheredPreferences = userPreferences.get(chatId);
-        String selectedCommunity = selectedCommunities.get(chatId);
+        ApartmentFilter gatheredPreferences = userPreferences.remove(chatId);
+        String selectedCommunity = selectedCommunities.remove(chatId);
         userFilterService.saveUserFilters(chatId, selectedCommunity, gatheredPreferences);
     }
-
 
     @Override
     public String getBotUsername() {
         return botName;
     }
-
 }

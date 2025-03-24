@@ -1,6 +1,6 @@
 apartments:
   url: https://search.irvinecompanyapartments.com/units/rank
-  checkInterval: 1800000 # 30 * 60 * 1000
+  checkInterval: 30
   communities:
     - communityId: 11584d39-2644-4b8e-8548-7c2a126c0570
       name: Promenade

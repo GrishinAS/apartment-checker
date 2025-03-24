@@ -191,6 +191,7 @@ public class DataSyncService {
             LeasePrice earliestPrice = createLeasePrice(aptDTO.getUnitEarliestAvailable(), unit);
             earliestPrice.setIsEarliestAvailable(true);
             earliestPrice.setIsStartingPrice(false);
+            unit.setUnitEarliestAvailable(earliestPrice);
             unit.getLeasePrices().add(earliestPrice);
         }
         

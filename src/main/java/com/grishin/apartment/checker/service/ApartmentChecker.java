@@ -7,45 +7,79 @@ import com.grishin.apartment.checker.dto.AptDTO;
 import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
 import com.grishin.apartment.checker.storage.ApartmentSpecifications;
 import com.grishin.apartment.checker.storage.UnitRepository;
+import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
-import com.grishin.apartment.checker.telegram.TelegramBot;
+import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
+import com.grishin.apartment.checker.telegram.MainBotController;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class ApartmentChecker {
-    private final TelegramBot bot;
     private final IrvineCompanyClient client;
     private final ApartmentsConfig apartmentsConfig;
     private final UserFilterService userFilterService;
     private final UnitRepository unitRepository;
     private final DataSyncService dataSyncService;
+    private final MainBotController bot;
+    private final UserFilterPreferenceRepository userFilterPreferenceRepository;
 
 
-    @Scheduled(fixedRateString = "${apartments.checkInterval}",  initialDelayString = "${apartments.checkInterval}")
+    @Scheduled(fixedRateString = "${apartments.checkInterval}",  initialDelayString = "${apartments.checkInterval}", timeUnit = TimeUnit.MINUTES)
     public void checkForNewApartments() {
         log.info("Checking for new apartments");
-        // retrieve current
-        List<Unit> allUnits = unitRepository.findAll();
-        Set<String> existingUnitIds = allUnits.stream().map(Unit::getObjectId).collect(Collectors.toSet());
+        try {
+            Set<String> existingUnitIds = unitRepository.findAll()
+                    .stream().map(Unit::getObjectId).collect(Collectors.toSet());
+            log.info("Found {} existing units", existingUnitIds.size());
 
-        List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments("Los Olivos");
-        Set<AptDTO> newApartments = apartmentData.stream()
-                .flatMap(group -> group.getUnits().stream())
-                .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
-        //.forEach(this::alertNewUnit);
+            List<String> communities = apartmentsConfig.getCommunities()
+                    .stream().map(CommunityConfig::getName).toList();
+
+            for (String community : communities) {
+                checkAndNotifyCommunity(community, existingUnitIds);
+            }
+        } catch (Exception e) {
+            log.error("Error during apartment check", e);
+        }
     }
 
-    //@PostConstruct
+    private void checkAndNotifyCommunity(String community, Set<String> existingUnitIds) {
+        List<Long> usersThatSelectedCommunity = userFilterPreferenceRepository.findBySelectedCommunity(community)
+                .stream().map(UserFilterPreference::getUserId).toList();
+        List<FloorPlanGroupDTO> newApartmentData = fetchAvailableApartments(community);
+        Set<AptDTO> newApartments = newApartmentData.stream()
+                .flatMap(group -> group.getUnits().stream())
+                .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
+        log.info("Found {} new apartments in community {}", newApartments.size(), community);
+        if (newApartments.size() > 3) {
+            log.warn("Found too much new apartments: {}", newApartments.size());
+            return;
+        }
+        for (Long userId : usersThatSelectedCommunity) {
+            for (AptDTO newApartment : newApartments) {
+                try {
+                    alertNewUnit(newApartment, userId);
+                } catch (TelegramApiException e) {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
+    }
+
+    @PostConstruct
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
@@ -69,7 +103,7 @@ public class ApartmentChecker {
         return findApartmentsWithFilters(filters);
     }
 
-    private void alertNewUnit(AptDTO unit) {
+    private void alertNewUnit(AptDTO unit, Long userId) throws TelegramApiException {
         StringBuilder message = new StringBuilder();
         message.append("*New Apartment Available!*\n\n");
 
@@ -86,7 +120,7 @@ public class ApartmentChecker {
         message.append("Stainless Steel Appliances: ").append(unit.getUnitAmenities().contains("Stainless Steel Appliances") ? "Yes" : "No").append("\n");
         message.append("Available From: ").append(unit.getUnitEarliestAvailable().getDate());
 
-        bot.sendMessage(message.toString());
+        bot.sendMessage(userId, message.toString());
     }
 
     private List<FloorPlanGroupDTO> fetchAvailableApartments(String communityName) {

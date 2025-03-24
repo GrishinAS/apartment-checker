@@ -27,12 +27,17 @@ public class Unit {
     private Boolean unitHasDiscount;
     private String featuredAmenity;
 
-
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
     @ManyToOne
     @JoinColumn(name = "floor_plan_unique_id")
     private FloorPlan floorPlan;
+
+    @ToString.Exclude
+    @EqualsAndHashCode.Exclude
+    @ManyToOne
+    @JoinColumn(name = "unit_earliest_available")
+    private LeasePrice unitEarliestAvailable;
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
