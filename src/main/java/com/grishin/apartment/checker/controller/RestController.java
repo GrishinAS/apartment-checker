@@ -22,4 +22,9 @@ public class RestController {
     public List<Unit> getCurrentApartments(Long userId) {
         return apartmentChecker.findApartmentsForUser(userId);
     }
+
+    @GetMapping("/forceScheduledCheck")
+    public void checkForNewApartments() {
+        apartmentChecker.checkForNewApartments();
+    }
 }

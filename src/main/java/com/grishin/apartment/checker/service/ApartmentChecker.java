@@ -63,10 +63,10 @@ public class ApartmentChecker {
                 .flatMap(group -> group.getUnits().stream())
                 .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
         log.info("Found {} new apartments in community {}", newApartments.size(), community);
-        if (newApartments.size() > 3) {
-            log.warn("Found too much new apartments: {}", newApartments.size());
-            return;
-        }
+//        if (newApartments.size() > 3) {
+//            log.warn("Found too much new apartments: {}", newApartments.size());
+//            return;
+//        }
         for (Long userId : usersThatSelectedCommunity) {
             for (AptDTO newApartment : newApartments) {
                 try {
@@ -107,29 +107,35 @@ public class ApartmentChecker {
     }
 
     private void alertNewUnit(AptDTO unit, Long userId) throws TelegramApiException {
-        StringBuilder message = new StringBuilder();
-        message.append("*New Apartment Available!*\n\n");
-
-        if (unit.isUnitIsStudio()) {
-            message.append("Studio");
-        } else {
-            message.append("Bedrooms: ").append(unit.getFloorplanBed()).append("\n");
-            message.append("Bathrooms: ").append(unit.getFloorplanBath()).append("\n");
-        }
-        message.append("Building Number: ").append(unit.getBuildingNumber()).append("\n");
-        message.append("Floor: ").append(unit.getUnitFloor()).append("\n");
-        message.append("Price: $").append(unit.getUnitEarliestAvailable().getPrice()).append("\n");
-        message.append("Floorplan: ").append(unit.getFloorplanName()).append("\n");
-        message.append("Stainless Steel Appliances: ").append(unit.getUnitAmenities().contains("Stainless Steel Appliances") ? "Yes" : "No").append("\n");
-        message.append("Available From: ").append(unit.getUnitEarliestAvailable().getDate());
-
-        bot.sendMessage(userId, message.toString());
+        String message = alertAvailableUnitMessage(unit);
+        bot.sendMessage(userId, message);
     }
 
     private List<FloorPlanGroupDTO> fetchAvailableApartments(String communityName) {
         CommunityConfig community = apartmentsConfig.getCommunities().stream()
                 .filter(c -> c.getName().equals(communityName)).findFirst().orElseThrow();
         return client.fetchApartments(community.getCommunityId(), 10);
+    }
+
+    public static String alertAvailableUnitMessage(AptDTO unit) {
+        StringBuilder message = new StringBuilder();
+        message.append("New Apartment Available\n\n");
+
+        message.append("<b>Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName()).append("</b>\n");
+        if (unit.isUnitIsStudio()) {
+            message.append("Studio");
+        } else {
+            message.append("Bedrooms: ").append(unit.getFloorplanBed()).append("\n");
+            message.append("Bathrooms: ").append(unit.getFloorplanBath()).append("\n");
+        }
+        message.append("Floor: ").append(unit.getUnitFloor()).append("\n");
+        message.append("Price: $").append(unit.getUnitEarliestAvailable().getPrice()).append("\n");
+        message.append("Floorplan: ").append(unit.getFloorplanName()).append("\n");
+        message.append("Amenities:\n");
+        unit.getUnitAmenities().forEach(amenity -> message.append("   ").append(amenity).append("\n"));
+        message.append("Available From: ").append(unit.getUnitEarliestAvailable().getDate());
+        message.append("\n");
+        return message.toString();
     }
 }
 
