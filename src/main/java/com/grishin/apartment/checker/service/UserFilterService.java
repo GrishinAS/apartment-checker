@@ -54,7 +54,6 @@ public class UserFilterService {
             preference.setCreatedAt(LocalDateTime.now());
         }
 
-        // Update with new filter values
         preference.setIsStudio(filters.getIsStudio());
         preference.setMinBedrooms(filters.getMinBedrooms());
         preference.setMaxBedrooms(filters.getMaxBedrooms());

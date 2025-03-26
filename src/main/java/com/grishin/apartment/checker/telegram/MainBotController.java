@@ -90,33 +90,21 @@ public class MainBotController extends TelegramLongPollingBot {
             ConversationState currentState = userStates.get(chatId);
             log.info("Received message '{}' in state '{}'", messageText, currentState);
             switch (currentState) {
-                case IDLE:
-                    if (messageText.equals("/start")) {
-                        sendCommunitySelection(chatId);
-                        userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
-                        userPreferences.put(chatId, new ApartmentFilter());
-                    } else if (messageText.equals("/getCurrentAvailable")) {
-                        sendApartmentList(chatId);
-                    }
-                    break;
-
-                case WAITING_FOR_COMMUNITY:
+                case IDLE -> handleDefaultState(messageText, chatId);
+                case WAITING_FOR_COMMUNITY -> {
                     processSelectedCommunity(chatId, messageText);
                     sendAmenitiesOptions(chatId);
                     userStates.put(chatId, ConversationState.WAITING_FOR_AMENITIES);
-                    break;
-
-                case SETTING_MIN_PRICE:
+                }
+                case SETTING_MIN_PRICE -> {
                     processPrice(chatId, messageText);
                     sendPriceRequest(chatId);
-                    break;
-
-                case SETTING_MAX_PRICE:
+                }
+                case SETTING_MAX_PRICE -> {
                     processPrice(chatId, messageText);
                     sendDateRangeSlider(chatId, update);
-                    break;
-
-                case REVIEW_PREFERENCES:
+                }
+                case REVIEW_PREFERENCES -> {
                     if (messageText.equalsIgnoreCase("confirm")) {
                         saveUserPreferences(chatId);
                         sendFinalConfirmation(chatId);
@@ -126,11 +114,28 @@ public class MainBotController extends TelegramLongPollingBot {
                         userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
                         userPreferences.put(chatId, new ApartmentFilter());
                     }
-                    break;
+                }
             }
         } catch (Exception e) {
             log.error("Error during handling update", e);
         }
+    }
+
+    private void handleDefaultState(String messageText, long chatId) throws TelegramApiException {
+        switch (messageText) {
+            case "/start" -> {
+                sendCommunitySelection(chatId);
+                userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
+                userPreferences.put(chatId, new ApartmentFilter());
+            }
+            case "/getCurrentAvailable" -> sendApartmentList(chatId);
+            case "/unsubscribe" -> unsubscribeUser(chatId);
+        }
+    }
+
+    private void unsubscribeUser(long chatId) {
+        log.info("Unsubscribing user {}", chatId);
+        userFilterService.clearUserFilters(chatId);
     }
 
     public void sendMessage(long chatId, String text) throws TelegramApiException {
@@ -215,7 +220,7 @@ public class MainBotController extends TelegramLongPollingBot {
     }
 
     private String generateApartmentListText(List<Unit> apartments, int page) {
-        int pageSize = 10;
+        int pageSize = 5;
         int totalPages = (int) Math.ceil((double) apartments.size() / pageSize);
         int startIndex = page * pageSize;
         int endIndex = Math.min(startIndex + pageSize, apartments.size());
@@ -423,9 +428,9 @@ public class MainBotController extends TelegramLongPollingBot {
         ConversationState state = userStates.get(chatId);
         String title;
         if (state == ConversationState.SETTING_MIN_DATE)
-            title = "Set minimum date:";
+            title = "Set minimum starting date:";
         else if (state == ConversationState.SETTING_MAX_DATE)
-            title = "Set maximum date:";
+            title = "Set maximum starting date:";
         else throw new RuntimeException("Invalid state");
 
         SendMessage message = new SendMessage();
@@ -465,7 +470,9 @@ public class MainBotController extends TelegramLongPollingBot {
         String message = """
                 ✅ Your preferences have been saved! You will receive updates based on your criteria.
                 
-                Type /start to set new preferences anytime or /getCurrentAvailable if you want to see current available apartments by your criteria.""";
+                Type /start to set new preferences anytime or /getCurrentAvailable if you want to see current available apartments by your criteria.
+                
+                Type /unsubscribe to stop receiving updates.""";
         sendMessage(chatId, message);
     }
 

@@ -18,6 +18,7 @@ public class KeyboardUtils {
     public static final int MIN_PRICE = 2000;
     public static final int MAX_PRICE = 5000;
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd-MM-yyyy");
+    public static final SimpleDateFormat PRETTY_DATE_FORMAT = new SimpleDateFormat("dd/MM/yyyy");
 
     public static InlineKeyboardMarkup generateApartmentListKeyboard(List<Unit> apartments, int page) {
         int pageSize = 10;
@@ -58,20 +59,22 @@ public class KeyboardUtils {
 
     public static String alertAvailableUnitMessage(Unit unit) {
         StringBuilder message = new StringBuilder();
+        message.append("\n");
+        message.append("Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName());
         if (unit.getUnitIsStudio()) {
             message.append("Studio");
         } else {
             message.append("Bedrooms: ").append(unit.getFloorPlan().getFloorPlanBed()).append("\n");
             message.append("Bathrooms: ").append(unit.getFloorPlan().getFloorPlanBath()).append("\n");
         }
-        message.append("Building Number: ").append(unit.getBuildingNumber()).append("\n");
         message.append("Floor: ").append(unit.getUnitFloor()).append("\n");
         message.append("Price: $").append(unit.getUnitEarliestAvailable().getPrice()).append("\n");
         message.append("Floorplan: ").append(unit.getFloorPlan().getFloorPlanName()).append("\n");
-        message.append("Amenities: ");
-        unit.getAmenities().forEach(amenity -> message.append(amenity.getAmenityName()).append("\n")); // todo fails here with lazy initialization
-        message.append("Available From: ").append(unit.getUnitEarliestAvailable().getAvailableDate());
-
+        message.append("Amenities:\n");
+        unit.getAmenities().forEach(amenity -> message.append("   ").append(amenity.getAmenityName()).append("\n"));
+        Date availableDate = unit.getUnitEarliestAvailable().getAvailableDate();
+        message.append("Available From: ").append(PRETTY_DATE_FORMAT.format(availableDate));
+        message.append("\n");
         return message.toString();
     }
 
