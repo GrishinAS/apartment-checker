@@ -5,6 +5,7 @@ import com.grishin.apartment.checker.storage.entity.FloorPlan;
 import com.grishin.apartment.checker.storage.entity.LeasePrice;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UnitAmenity;
+import jakarta.annotation.Nullable;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
 
@@ -14,6 +15,10 @@ import java.util.List;
 public class ApartmentSpecifications {
 
     public static Specification<Unit> filterBy(ApartmentFilter filter) {
+        return filterBy(filter, null);
+    }
+
+    public static Specification<Unit> filterBy(ApartmentFilter filter, @Nullable List<String> optionalObjectIds) {
         return (root, query, criteriaBuilder) -> {
             List<Predicate> predicates = new ArrayList<>();
 
@@ -21,6 +26,12 @@ public class ApartmentSpecifications {
 
             Join<Unit, FloorPlan> floorPlanJoin = root.join("floorPlan", JoinType.LEFT);
             Join<Unit, LeasePrice> leasePriceJoin = root.join("leasePrices", JoinType.LEFT);
+
+            if (optionalObjectIds != null) {
+                if (!optionalObjectIds.isEmpty()) {
+                    predicates.add(root.get("objectId").in(optionalObjectIds));
+                }
+            }
 
             if (filter.getIsStudio() != null) {
                 predicates.add(criteriaBuilder.equal(root.get("unitIsStudio"), filter.getIsStudio()));

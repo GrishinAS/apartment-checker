@@ -10,6 +10,7 @@ import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
+import com.grishin.apartment.checker.telegram.KeyboardUtils;
 import com.grishin.apartment.checker.telegram.MainBotController;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -18,7 +19,9 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -46,35 +49,40 @@ public class ApartmentChecker {
 
             List<String> communities = apartmentsConfig.getCommunities()
                     .stream().map(CommunityConfig::getName).toList();
+            Map<String, Set<AptDTO>> newApartmentsPerCommunity = new HashMap<>();
+            for (String community : communities) {
+                List<FloorPlanGroupDTO> newApartmentDataForCommunity = fetchAvailableApartments(community);
+                Set<AptDTO> newApartmentsForCommunity = newApartmentDataForCommunity.stream()
+                        .flatMap(group -> group.getUnits().stream())
+                        .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
+                newApartmentsPerCommunity.put(community, newApartmentsForCommunity);
+            }
+
+            syncApartmentData();
 
             for (String community : communities) {
-                checkAndNotifyCommunity(community, existingUnitIds);
-            }
-        } catch (Exception e) {
-            log.error("Error during apartment check", e);
-        }
-    }
-
-    private void checkAndNotifyCommunity(String community, Set<String> existingUnitIds) {
-        List<Long> usersThatSelectedCommunity = userFilterPreferenceRepository.findBySelectedCommunity(community)
-                .stream().map(UserFilterPreference::getUserId).toList();
-        List<FloorPlanGroupDTO> newApartmentData = fetchAvailableApartments(community);
-        Set<AptDTO> newApartments = newApartmentData.stream()
-                .flatMap(group -> group.getUnits().stream())
-                .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
-        log.info("Found {} new apartments in community {}", newApartments.size(), community);
-//        if (newApartments.size() > 3) {
-//            log.warn("Found too much new apartments: {}", newApartments.size());
-//            return;
-//        }
-        for (Long userId : usersThatSelectedCommunity) {
-            for (AptDTO newApartment : newApartments) {
-                try {
-                    alertNewUnit(newApartment, userId);
-                } catch (TelegramApiException e) {
-                    throw new RuntimeException(e);
+                List<Long> usersThatSelectedCommunity = userFilterPreferenceRepository.findBySelectedCommunity(community)
+                        .stream().map(UserFilterPreference::getUserId).toList();
+                for (Long userId : usersThatSelectedCommunity) {
+                    ApartmentFilter userFilters = userFilterService.getUserFilters(userId);
+                    List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community).stream().map(AptDTO::getObjectID).toList();
+                    List<Unit> filteredNewUnits = findApartmentsByIdsWithFilters(userFilters, newApartmentsIdsForCommunity);
+//                    if (filteredNewUnits.size() > 3) { // remove later
+//                        log.warn("Found too much new apartments: {}", filteredNewUnits.size());
+//                        continue;
+//                    }
+                    for (Unit newApartment : filteredNewUnits) {
+                        try {
+                            alertNewUnit(newApartment, userId);
+                        } catch (TelegramApiException e) {
+                            throw new RuntimeException(e);
+                        }
+                    }
                 }
             }
+
+        } catch (Exception e) {
+            log.error("Error during apartment check", e);
         }
     }
 
@@ -101,13 +109,18 @@ public class ApartmentChecker {
         return unitRepository.findAll(spec);
     }
 
+    public List<Unit> findApartmentsByIdsWithFilters(ApartmentFilter filters, List<String> ids) {
+        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters, ids);
+        return unitRepository.findAll(spec);
+    }
+
     public List<Unit> findApartmentsForUser(Long userId) {
         ApartmentFilter filters = userFilterService.getUserFilters(userId);
         return findApartmentsWithFilters(filters);
     }
 
-    private void alertNewUnit(AptDTO unit, Long userId) throws TelegramApiException {
-        String message = alertAvailableUnitMessage(unit);
+    private void alertNewUnit(Unit unit, Long userId) throws TelegramApiException {
+        String message = KeyboardUtils.alertAvailableUnitMessage(unit);
         bot.sendMessage(userId, message);
     }
 
@@ -115,27 +128,6 @@ public class ApartmentChecker {
         CommunityConfig community = apartmentsConfig.getCommunities().stream()
                 .filter(c -> c.getName().equals(communityName)).findFirst().orElseThrow();
         return client.fetchApartments(community.getCommunityId(), 10);
-    }
-
-    public static String alertAvailableUnitMessage(AptDTO unit) {
-        StringBuilder message = new StringBuilder();
-        message.append("New Apartment Available\n\n");
-
-        message.append("<b>Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName()).append("</b>\n");
-        if (unit.isUnitIsStudio()) {
-            message.append("Studio");
-        } else {
-            message.append("Bedrooms: ").append(unit.getFloorplanBed()).append("\n");
-            message.append("Bathrooms: ").append(unit.getFloorplanBath()).append("\n");
-        }
-        message.append("Floor: ").append(unit.getUnitFloor()).append("\n");
-        message.append("Price: $").append(unit.getUnitEarliestAvailable().getPrice()).append("\n");
-        message.append("Floorplan: ").append(unit.getFloorplanName()).append("\n");
-        message.append("Amenities:\n");
-        unit.getUnitAmenities().forEach(amenity -> message.append("   ").append(amenity).append("\n"));
-        message.append("Available From: ").append(unit.getUnitEarliestAvailable().getDate());
-        message.append("\n");
-        return message.toString();
     }
 }
 
