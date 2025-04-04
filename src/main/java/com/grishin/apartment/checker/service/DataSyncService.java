@@ -35,8 +35,9 @@ public class DataSyncService {
     public void processApartmentData(List<FloorPlanGroupDTO> apartmentDataList, String communityId) {
         
         Set<String> processedUnitIds = new HashSet<>();
-
+        int counter = 1;
         for (FloorPlanGroupDTO apartmentData : apartmentDataList) {
+            log.debug("Processing group #{} type {}", counter++, apartmentData.getGroupType());
             
             FloorPlanGroup group = getOrCreateFloorPlanGroup(apartmentData.getGroupType());
             floorPlanGroupRepository.saveAndFlush(group);
@@ -75,13 +76,16 @@ public class DataSyncService {
     private FloorPlanGroup getOrCreateFloorPlanGroup(String groupType) {
         FloorPlanGroup group = floorPlanGroupRepository.findByGroupType(groupType);
         if (group == null) {
+            log.debug("Creating new group: {}", groupType);
             group = new FloorPlanGroup();
             group.setGroupType(groupType);
         }
+        log.debug("Return group: {}", group.getGroupId());
         return group;
     }
 
     private void processUnit(AptDTO aptDto, FloorPlanGroup group) {
+        log.debug("Processing unit: {}", aptDto.getUnitID());
         Community community = getOrCreateCommunity(aptDto);
         
         FloorPlan floorPlan = getOrCreateFloorPlan(aptDto);
@@ -93,7 +97,7 @@ public class DataSyncService {
         
         processUnitAmenities(unit, aptDto.getUnitAmenities());
         
-        processLeasePrices(unit, aptDto);
+        processLeasePrice(unit, aptDto.getUnitEarliestAvailable());
     }
 
     private void addUnitToGroup(Unit unit, FloorPlanGroup group) {
@@ -101,6 +105,7 @@ public class DataSyncService {
                 .anyMatch(u -> u.getObjectId().equals(unit.getObjectId()));
 
         if (!unitAlreadyInGroup) {
+            log.debug("Adding unit {} to group: {}", unit.getObjectId(), group.getGroupId());
             group.getUnits().add(unit);
             unit.getGroups().add(group);
         }
@@ -108,26 +113,38 @@ public class DataSyncService {
 
     private void addFloorPlanToGroup(FloorPlan floorPlan, FloorPlanGroup group) {
         if (!group.getFloorPlans().contains(floorPlan)) {
+            log.debug("Adding floor plan {} to group: {}", floorPlan.getFloorPlanId(), group.getGroupId());
             group.getFloorPlans().add(floorPlan);
             floorPlan.getGroups().add(group);
         }
     }
 
     private Community getOrCreateCommunity(AptDTO aptDTO) {
-        Community community = communityRepository.findById(aptDTO.getCommunityIDAEM()).orElse(new Community());
+        Optional<Community> comOpt = communityRepository.findById(aptDTO.getCommunityIDAEM());
+        if (comOpt.isPresent()) {
+            log.debug("Community is present {}", comOpt.get().getId());
+            return comOpt.get();
+        }
+        
+        Community community = new Community();
 
         community.setId(aptDTO.getCommunityIDAEM());
         community.setMarketingName(aptDTO.getCommunityMarketingName());
         community.setPropertyId(aptDTO.getPropertyID());
         community.setPropertyAddress(aptDTO.getPropertyAddress());
         community.setPropertyZip(aptDTO.getPropertyZip());
-
+        log.debug("Save new Community {}", community.getId());
         return communityRepository.save(community);
     }
 
     private FloorPlan getOrCreateFloorPlan(AptDTO aptDTO) {
-        FloorPlan floorPlan = floorPlanRepository.findById(aptDTO.getFloorplanUniqueID())
-                .orElse(new FloorPlan());
+        Optional<FloorPlan> floorPlanOpt = floorPlanRepository.findById(aptDTO.getFloorplanUniqueID());
+        if (floorPlanOpt.isPresent()) {
+            log.debug("FloorPlan is present {}", floorPlanOpt.get().getFloorPlanId());
+            return floorPlanOpt.get();
+        }
+
+        FloorPlan floorPlan = new FloorPlan();
 
         floorPlan.setFloorPlanUniqueId(aptDTO.getFloorplanUniqueID());
         floorPlan.setFloorPlanId(aptDTO.getFloorplanID());
@@ -140,11 +157,18 @@ public class DataSyncService {
         floorPlan.setFloorPlanBath(aptDTO.getFloorplanBath());
         floorPlan.setFloorPlanDeposit(aptDTO.getFloorplanDeposit());
 
+        log.debug("Save new FloorPlan {}", floorPlan.getFloorPlanId());
         return floorPlanRepository.save(floorPlan);
     }
 
     private Unit getOrCreateUnit(AptDTO aptDTO, Community community, FloorPlan floorPlan) {
-        Unit unit = unitRepository.findById(aptDTO.getObjectID()).orElse(new Unit());
+        Optional<Unit> unitOpt = unitRepository.findById(aptDTO.getObjectID());
+        if (unitOpt.isPresent()) {
+            log.debug("Unit is present {}", unitOpt.get().getObjectId());
+            return unitOpt.get();
+        }
+
+        Unit unit = new Unit();
 
         unit.setUnitId(aptDTO.getUnitID());
         unit.setUnitMarketingName(aptDTO.getUnitMarketingName());
@@ -169,47 +193,29 @@ public class DataSyncService {
             return;
         }
 
-        unit.getAmenities().clear();
-
         for (String amenityName : amenityNames) {
-            UnitAmenity amenity = unitAmenityRepository.findByAmenityName(amenityName)
-                    .orElseGet(() -> {
-                        UnitAmenity newAmenity = new UnitAmenity();
-                        newAmenity.setAmenityName(amenityName);
-                        return unitAmenityRepository.save(newAmenity);
-                    });
+            Optional<UnitAmenity> amenityOptional = unitAmenityRepository.findByAmenityName(amenityName);
+            UnitAmenity amenity;
+            if (amenityOptional.isPresent()) {
+                log.debug("Amenity is present {}", amenityOptional.get().getId());
+                amenity = amenityOptional.get();
+            }
+            else {
+                amenity = new UnitAmenity();
+                amenity.setAmenityName(amenityName);
+                log.debug("Saving new amenity {} for unit {}", amenity.getId(), unit.getObjectId());
+                amenity = unitAmenityRepository.save(amenity);
+            }
+
             unit.getAmenities().add(amenity);
         }
     }
 
-    private void processLeasePrices(Unit unit, AptDTO aptDTO) {
-        
-        leasePriceRepository.deleteByUnitUnitId(unit.getObjectId());
-        unit.getLeasePrices().clear();
-        
-        if (aptDTO.getUnitEarliestAvailable() != null) {
-            LeasePrice earliestPrice = createLeasePrice(aptDTO.getUnitEarliestAvailable(), unit);
-            earliestPrice.setIsEarliestAvailable(true);
-            earliestPrice.setIsStartingPrice(false);
-            unit.setUnitEarliestAvailable(earliestPrice);
-            unit.getLeasePrices().add(earliestPrice);
-        }
-        
-        if (aptDTO.getUnitStartingPrice() != null) {
-            LeasePrice startingPrice = createLeasePrice(aptDTO.getUnitStartingPrice(), unit);
-            startingPrice.setIsEarliestAvailable(false);
-            startingPrice.setIsStartingPrice(true);
-            unit.getLeasePrices().add(startingPrice);
-        }
+    private void processLeasePrice(Unit unit, LeaseTermDTO earliestAvailable) {
+        log.debug("Save lease price {} for {} unit", earliestAvailable.getPrice(), unit.getObjectId());
 
-        if (aptDTO.getUnitLeasePrice() != null) {
-            for (LeaseTermDTO LeaseTermDTO : aptDTO.getUnitLeasePrice()) {
-                LeasePrice leasePrice = createLeasePrice(LeaseTermDTO, unit);
-                leasePrice.setIsEarliestAvailable(false);
-                leasePrice.setIsStartingPrice(false);
-                unit.getLeasePrices().add(leasePrice);
-            }
-        }
+        LeasePrice earliestPrice = createLeasePrice(earliestAvailable, unit);
+        unit.setUnitEarliestAvailable(earliestPrice);
     }
 
     private LeasePrice createLeasePrice(LeaseTermDTO leaseTermDTO, Unit unit) {
@@ -224,7 +230,7 @@ public class DataSyncService {
         } catch (ParseException e) {
             log.warn("Could not parse date: " + leaseTermDTO.getDate(), e);
         }
-
+        log.debug("Lease price created {}", leasePrice);
         return leasePrice;
     }
 
