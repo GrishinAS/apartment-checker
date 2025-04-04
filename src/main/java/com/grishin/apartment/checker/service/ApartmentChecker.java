@@ -90,13 +90,12 @@ public class ApartmentChecker {
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
-            List<String> communities = apartmentsConfig.getCommunities()
-                    .stream().map(CommunityConfig::getName).toList();
-            for (String communityName : communities) {
-                List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments(communityName);
+            List<CommunityConfig> communities = apartmentsConfig.getCommunities();
+            for (CommunityConfig community: communities) {
+                List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments(community.getName());
 
-                dataSyncService.processApartmentData(apartmentData);
-                log.info("Synchronized apartment data for community {}", communityName);
+                dataSyncService.processApartmentData(apartmentData, community.getCommunityId());
+                log.info("Synchronized apartment data for community {}", community.getName());
             }
             log.info("Apartment data synchronization completed successfully");
         } catch (Exception e) {
@@ -104,20 +103,12 @@ public class ApartmentChecker {
         }
     }
 
-    public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {
-        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters);
-        return unitRepository.findAll(spec);
-    }
 
     public List<Unit> findApartmentsByIdsWithFilters(ApartmentFilter filters, List<String> ids) {
         Specification<Unit> spec = ApartmentSpecifications.filterBy(filters, ids);
         return unitRepository.findAll(spec);
     }
 
-    public List<Unit> findApartmentsForUser(Long userId) {
-        ApartmentFilter filters = userFilterService.getUserFilters(userId);
-        return findApartmentsWithFilters(filters);
-    }
 
     private void alertNewUnit(Unit unit, Long userId) throws TelegramApiException {
         String message = KeyboardUtils.alertAvailableUnitMessage(unit);

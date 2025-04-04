@@ -32,7 +32,7 @@ public class DataSyncService {
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
 
     @Transactional
-    public void processApartmentData(List<FloorPlanGroupDTO> apartmentDataList) {
+    public void processApartmentData(List<FloorPlanGroupDTO> apartmentDataList, String communityId) {
         
         Set<String> processedUnitIds = new HashSet<>();
 
@@ -69,7 +69,7 @@ public class DataSyncService {
             floorPlanGroupRepository.save(group);
         }
 
-        handleRemovedUnits(processedUnitIds);
+        handleRemovedUnits(processedUnitIds, communityId);
     }
 
     private FloorPlanGroup getOrCreateFloorPlanGroup(String groupType) {
@@ -228,8 +228,8 @@ public class DataSyncService {
         return leasePrice;
     }
 
-    private void handleRemovedUnits(Set<String> processedUnitIds) {
-        List<Unit> allUnits = unitRepository.findAll();
+    private void handleRemovedUnits(Set<String> processedUnitIds, String communityId) {
+        List<Unit> allUnits = unitRepository.findByCommunityId(communityId);
         List<Unit> removedUnits = allUnits.stream()
                 .filter(unit -> !processedUnitIds.contains(unit.getObjectId()))
                 .toList();

@@ -16,6 +16,7 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.HashSet;
@@ -59,19 +60,17 @@ public class DataSyncServiceTest {
 
     @Test
     public void testProcessApartmentData() throws IOException {
-        // Load test data from JSON file
         ObjectMapper objectMapper = new ObjectMapper();
         String path = "irvine-apartment-sample.json";
         List<FloorPlanGroupDTO> apartmentDataList = objectMapper.readValue(
                 new ClassPathResource(path).getInputStream(),
-                new TypeReference<List<FloorPlanGroupDTO>>() {});
+                new TypeReference<>() {
+                });
 
-        // Verify test data is loaded correctly
         assertNotNull(apartmentDataList);
         assertFalse(apartmentDataList.isEmpty());
 
-        // Process the data
-        apartmentService.processApartmentData(apartmentDataList);
+        apartmentService.processApartmentData(apartmentDataList, null);
 
         // Verify floor plan groups were created
         List<FloorPlanGroup> groups = floorPlanGroupRepository.findAll();
