@@ -9,9 +9,9 @@ apartments:
 
 logging:
   level:
-    org:
-      hibernate:
-        SQL: INFO
+    root: INFO
+    org.hibernate.SQL: INFO
+    com.grishin: DEBUG
 
 spring:
   application.name: apartment.checker
@@ -30,7 +30,7 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: update
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         format_sql: true

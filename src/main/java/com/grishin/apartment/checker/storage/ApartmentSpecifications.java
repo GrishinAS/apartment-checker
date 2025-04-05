@@ -25,7 +25,7 @@ public class ApartmentSpecifications {
             query.distinct(true);
 
             Join<Unit, FloorPlan> floorPlanJoin = root.join("floorPlan", JoinType.LEFT);
-            Join<Unit, LeasePrice> leasePriceJoin = root.join("leasePrices", JoinType.LEFT);
+            Join<Unit, LeasePrice> leasePriceJoin = root.join("unitEarliestAvailable", JoinType.LEFT);
 
             if (optionalObjectIds != null) {
                 if (!optionalObjectIds.isEmpty()) {

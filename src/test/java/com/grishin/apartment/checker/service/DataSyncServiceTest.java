@@ -2,6 +2,7 @@ package com.grishin.apartment.checker.service;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.grishin.apartment.checker.TestDataProvider;
 import com.grishin.apartment.checker.config.ApartmentsConfig;
 import com.grishin.apartment.checker.dto.AptDTO;
 import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
@@ -25,9 +26,9 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@DataJpaTest
+@DataJpaTest(showSql = false)
 @ActiveProfiles("test")
-@Import(DataSyncService.class)
+@Import({DataSyncService.class, UserFilterService.class})
 public class DataSyncServiceTest {
 
     @MockitoBean
@@ -55,17 +56,9 @@ public class DataSyncServiceTest {
     @Autowired
     private UnitAmenityRepository unitAmenityRepository;
 
-    @Autowired
-    private LeasePriceRepository leasePriceRepository;
-
     @Test
     public void testProcessApartmentData() throws IOException {
-        ObjectMapper objectMapper = new ObjectMapper();
-        String path = "irvine-apartment-sample.json";
-        List<FloorPlanGroupDTO> apartmentDataList = objectMapper.readValue(
-                new ClassPathResource(path).getInputStream(),
-                new TypeReference<>() {
-                });
+        List<FloorPlanGroupDTO> apartmentDataList = TestDataProvider.getSampleUnits();
 
         assertNotNull(apartmentDataList);
         assertFalse(apartmentDataList.isEmpty());
@@ -106,13 +99,7 @@ public class DataSyncServiceTest {
                     }
 
                     // Verify lease prices
-                    assertNotNull(unit.getLeasePrices());
-                    int expectedPriceCount = 0;
-                    if (aptDTO.getUnitEarliestAvailable() != null) expectedPriceCount++;
-                    if (aptDTO.getUnitStartingPrice() != null) expectedPriceCount++;
-                    if (aptDTO.getUnitLeasePrice() != null) expectedPriceCount += new HashSet<>(aptDTO.getUnitLeasePrice()).size();
-
-                    assertEquals(expectedPriceCount, unit.getLeasePrices().size());
+                    assertNotNull(unit.getUnitEarliestAvailable());
                 }
             }
 

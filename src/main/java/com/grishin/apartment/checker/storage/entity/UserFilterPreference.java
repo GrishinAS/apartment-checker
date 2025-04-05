@@ -1,9 +1,7 @@
 package com.grishin.apartment.checker.storage.entity;
 
 import jakarta.persistence.*;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.ToString;
+import lombok.*;
 
 import java.sql.Date;
 import java.time.LocalDateTime;
@@ -13,6 +11,7 @@ import java.util.Set;
 @Entity
 @Table(name = "user_filter_preferences")
 @Data
+@Builder
 public class UserFilterPreference {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

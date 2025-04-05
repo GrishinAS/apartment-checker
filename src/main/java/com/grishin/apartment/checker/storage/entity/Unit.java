@@ -35,7 +35,7 @@ public class Unit {
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    @ManyToOne
+    @ManyToOne(cascade = CascadeType.PERSIST)
     @JoinColumn(name = "unit_earliest_available")
     private LeasePrice unitEarliestAvailable;
 
@@ -59,9 +59,4 @@ public class Unit {
             inverseJoinColumns = @JoinColumn(name = "amenity_id")
     )
     private Set<UnitAmenity> amenities = new HashSet<>();
-
-    @ToString.Exclude
-    @EqualsAndHashCode.Exclude
-    @OneToMany(mappedBy = "unit", cascade = CascadeType.ALL)
-    private Set<LeasePrice> leasePrices = new HashSet<>();
 }

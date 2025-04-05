@@ -10,6 +10,8 @@ import java.util.List;
 
 public class TestDataProvider {
 
+    private static final ObjectMapper objectMapper = new ObjectMapper();
+
     public static List<FloorPlanGroupDTO> getInitialApartmentData() throws IOException {
         return parseFile(new TypeReference<>() {}, "apartment-setup.json");
     }
@@ -18,9 +20,11 @@ public class TestDataProvider {
         return parseFile(new TypeReference<>() {}, "apartment-update.json");
     }
 
-    private static List<FloorPlanGroupDTO> parseFile(TypeReference<List<FloorPlanGroupDTO>> valueTypeRef, String json) throws IOException {
-        ObjectMapper objectMapper = new ObjectMapper();
+    public static List<FloorPlanGroupDTO> getSampleUnits() throws IOException {
+        return parseFile(new TypeReference<>() {}, "irvine-apartment-sample.json");
+    }
 
+    private static List<FloorPlanGroupDTO> parseFile(TypeReference<List<FloorPlanGroupDTO>> valueTypeRef, String json) throws IOException {
         return objectMapper.readValue(
                 new ClassPathResource(json).getInputStream(),
                 valueTypeRef);

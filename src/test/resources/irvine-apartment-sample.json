@@ -109,7 +109,7 @@
         },
         "unitFloor": 4,
         "unitHasDiscount": false,
-        "unitID": "254",
+        "unitID": "378",
         "unitIsStudio": true,
         "unitLeasePrice": [
           {
@@ -135,11 +135,12 @@
         },
         "unitTypeCode": "S1C1",
         "unitTypeName": "Studio",
-        "objectID": "4534066_21_374"
+        "objectID": "4941177_20_378"
       }
     ],
     "unitIds": [
-      "4661945_22_38"
+      "4941177_20_378",
+      "4534066_21_374"
     ]
   }
 ]

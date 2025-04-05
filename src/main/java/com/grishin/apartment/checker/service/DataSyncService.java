@@ -1,12 +1,12 @@
 package com.grishin.apartment.checker.service;
 
-import com.grishin.apartment.checker.dto.AptDTO;
-import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
-import com.grishin.apartment.checker.dto.LeaseTermDTO;
+import com.grishin.apartment.checker.config.CommunityConfig;
+import com.grishin.apartment.checker.dto.*;
 import com.grishin.apartment.checker.storage.*;
 import com.grishin.apartment.checker.storage.entity.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -16,6 +16,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,7 +28,8 @@ public class DataSyncService {
     private final FloorPlanGroupRepository floorPlanGroupRepository;
     private final UnitRepository unitRepository;
     private final UnitAmenityRepository unitAmenityRepository;
-    private final LeasePriceRepository leasePriceRepository;
+    private final UserFilterService userFilterService;
+    private final UserFilterPreferenceRepository userFilterPreferenceRepository;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
 
@@ -37,7 +39,7 @@ public class DataSyncService {
         Set<String> processedUnitIds = new HashSet<>();
         int counter = 1;
         for (FloorPlanGroupDTO apartmentData : apartmentDataList) {
-            log.debug("Processing group #{} type {}", counter++, apartmentData.getGroupType());
+            log.debug("Processing FloorPlanGroupDTO #{} type {}", counter++, apartmentData.getGroupType());
             
             FloorPlanGroup group = getOrCreateFloorPlanGroup(apartmentData.getGroupType());
             floorPlanGroupRepository.saveAndFlush(group);
@@ -73,14 +75,40 @@ public class DataSyncService {
         handleRemovedUnits(processedUnitIds, communityId);
     }
 
+    public Set<String> getExistingUnits() {
+        return unitRepository.findAll()
+                .stream().map(Unit::getObjectId).collect(Collectors.toSet());
+    }
+
+    public List<UserFilterPreference> findUsersBySelectedCommunity(CommunityConfig community) {
+        return userFilterPreferenceRepository.findBySelectedCommunity(community.getName());
+    }
+
+    public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {
+        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters);
+        return unitRepository.findAll(spec);
+    }
+
+    @Transactional
+    public List<UnitMessage> findApartmentsByIdsWithFilters(ApartmentFilter filters, List<String> ids) {
+        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters, ids);
+        List<Unit> unitEntities = unitRepository.findAll(spec);
+        return unitEntities.stream().map(UnitMessage::fromEntity).toList();
+    }
+
+    public List<Unit> findApartmentsForUser(Long userId) {
+        ApartmentFilter filters = userFilterService.getUserFilters(userId);
+        return findApartmentsWithFilters(filters);
+    }
+
     private FloorPlanGroup getOrCreateFloorPlanGroup(String groupType) {
         FloorPlanGroup group = floorPlanGroupRepository.findByGroupType(groupType);
         if (group == null) {
-            log.debug("Creating new group: {}", groupType);
+            log.debug("Creating new FloorPlanGroup: {}", groupType);
             group = new FloorPlanGroup();
             group.setGroupType(groupType);
         }
-        log.debug("Return group: {}", group.getGroupId());
+        log.debug("Return FloorPlanGroup: {}", group.getGroupId());
         return group;
     }
 
@@ -98,6 +126,7 @@ public class DataSyncService {
         processUnitAmenities(unit, aptDto.getUnitAmenities());
         
         processLeasePrice(unit, aptDto.getUnitEarliestAvailable());
+
     }
 
     private void addUnitToGroup(Unit unit, FloorPlanGroup group) {
@@ -185,7 +214,7 @@ public class DataSyncService {
         unit.setCommunity(community);
         unit.setFloorPlan(floorPlan);
 
-        return unit;
+        return unitRepository.save(unit);
     }
 
     private void processUnitAmenities(Unit unit, List<String> amenityNames) {
@@ -203,11 +232,13 @@ public class DataSyncService {
             else {
                 amenity = new UnitAmenity();
                 amenity.setAmenityName(amenityName);
-                log.debug("Saving new amenity {} for unit {}", amenity.getId(), unit.getObjectId());
+                //amenity.setUnits(Set.of(unit));
+                log.debug("Saving new amenity {} for unit {}", amenityName, unit.getObjectId());
                 amenity = unitAmenityRepository.save(amenity);
             }
-
+            //amenity.getUnits().add(unit);
             unit.getAmenities().add(amenity);
+            log.debug("Amenity {} for unit {} saved", amenity.getId(), unit.getObjectId());
         }
     }
 

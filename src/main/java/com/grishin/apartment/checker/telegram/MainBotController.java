@@ -3,6 +3,7 @@ package com.grishin.apartment.checker.telegram;
 import com.grishin.apartment.checker.config.ApartmentsConfig;
 import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.ApartmentFilter;
+import com.grishin.apartment.checker.dto.UnitMessage;
 import com.grishin.apartment.checker.service.UserFilterService;
 import com.grishin.apartment.checker.storage.UnitAmenityRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
@@ -235,7 +236,7 @@ public class MainBotController extends TelegramLongPollingBot {
 
         for (int i = startIndex; i < endIndex; i++) {
             Unit apt = apartments.get(i);
-            sb.append(alertAvailableUnitMessage(apt));
+            sb.append(alertAvailableUnitMessage(UnitMessage.fromEntity(apt)));
         }
 
         return sb.toString();

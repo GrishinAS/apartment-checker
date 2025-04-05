@@ -5,6 +5,7 @@ import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.ApartmentFilter;
 import com.grishin.apartment.checker.dto.AptDTO;
 import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
+import com.grishin.apartment.checker.dto.UnitMessage;
 import com.grishin.apartment.checker.storage.ApartmentSpecifications;
 import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
@@ -17,6 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.HashMap;
@@ -32,48 +34,47 @@ import java.util.stream.Collectors;
 public class ApartmentChecker {
     private final IrvineCompanyClient client;
     private final ApartmentsConfig apartmentsConfig;
-    private final UserFilterService userFilterService;
-    private final UnitRepository unitRepository;
     private final DataSyncService dataSyncService;
     private final MainBotController bot;
-    private final UserFilterPreferenceRepository userFilterPreferenceRepository;
+
 
 
     @Scheduled(fixedRateString = "${apartments.checkInterval}",  initialDelayString = "${apartments.checkInterval}", timeUnit = TimeUnit.MINUTES)
     public void checkForNewApartments() {
         log.info("Checking for new apartments");
         try {
-            Set<String> existingUnitIds = unitRepository.findAll()
-                    .stream().map(Unit::getObjectId).collect(Collectors.toSet());
+            Set<String> existingUnitIds = dataSyncService.getExistingUnits();
             log.info("Found {} existing units", existingUnitIds.size());
 
-            List<String> communities = apartmentsConfig.getCommunities()
-                    .stream().map(CommunityConfig::getName).toList();
+            List<CommunityConfig> communities = apartmentsConfig.getCommunities();
+
             Map<String, Set<AptDTO>> newApartmentsPerCommunity = new HashMap<>();
-            for (String community : communities) {
-                List<FloorPlanGroupDTO> newApartmentDataForCommunity = fetchAvailableApartments(community);
+            for (CommunityConfig community : communities) {
+                List<FloorPlanGroupDTO> newApartmentDataForCommunity = fetchAvailableApartments(community.getCommunityId());
+
                 Set<AptDTO> newApartmentsForCommunity = newApartmentDataForCommunity.stream()
                         .flatMap(group -> group.getUnits().stream())
                         .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
-                newApartmentsPerCommunity.put(community, newApartmentsForCommunity);
+
+                newApartmentsPerCommunity.put(community.getName(), newApartmentsForCommunity);
+
+                dataSyncService.processApartmentData(newApartmentDataForCommunity, community.getCommunityId());
             }
 
-            syncApartmentData();
+            for (CommunityConfig community : communities) {
 
-            for (String community : communities) {
-                List<Long> usersThatSelectedCommunity = userFilterPreferenceRepository.findBySelectedCommunity(community)
-                        .stream().map(UserFilterPreference::getUserId).toList();
-                for (Long userId : usersThatSelectedCommunity) {
-                    ApartmentFilter userFilters = userFilterService.getUserFilters(userId);
-                    List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community).stream().map(AptDTO::getObjectID).toList();
-                    List<Unit> filteredNewUnits = findApartmentsByIdsWithFilters(userFilters, newApartmentsIdsForCommunity);
-//                    if (filteredNewUnits.size() > 3) { // remove later
-//                        log.warn("Found too much new apartments: {}", filteredNewUnits.size());
-//                        continue;
-//                    }
-                    for (Unit newApartment : filteredNewUnits) {
+                List<UserFilterPreference> usersThatSelectedCommunity = dataSyncService.findUsersBySelectedCommunity(community);
+
+                for (UserFilterPreference userPref : usersThatSelectedCommunity) {
+                    ApartmentFilter userFilters = ApartmentFilter.createFrom(userPref);
+
+                    List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community.getName()).stream().map(AptDTO::getObjectID).toList();
+
+                    List<UnitMessage> filteredNewUnits = dataSyncService.findApartmentsByIdsWithFilters(userFilters, newApartmentsIdsForCommunity);
+
+                    for (UnitMessage newApartment : filteredNewUnits) {
                         try {
-                            alertNewUnit(newApartment, userId);
+                            alertNewUnit(newApartment, userPref.getUserId());
                         } catch (TelegramApiException e) {
                             throw new RuntimeException(e);
                         }
@@ -86,13 +87,14 @@ public class ApartmentChecker {
         }
     }
 
+
     //@PostConstruct
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
             List<CommunityConfig> communities = apartmentsConfig.getCommunities();
             for (CommunityConfig community: communities) {
-                List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments(community.getName());
+                List<FloorPlanGroupDTO> apartmentData = fetchAvailableApartments(community.getCommunityId());
 
                 dataSyncService.processApartmentData(apartmentData, community.getCommunityId());
                 log.info("Synchronized apartment data for community {}", community.getName());
@@ -104,21 +106,14 @@ public class ApartmentChecker {
     }
 
 
-    public List<Unit> findApartmentsByIdsWithFilters(ApartmentFilter filters, List<String> ids) {
-        Specification<Unit> spec = ApartmentSpecifications.filterBy(filters, ids);
-        return unitRepository.findAll(spec);
-    }
 
-
-    private void alertNewUnit(Unit unit, Long userId) throws TelegramApiException {
+    private void alertNewUnit(UnitMessage unit, Long userId) throws TelegramApiException {
         String message = KeyboardUtils.alertAvailableUnitMessage(unit);
         bot.sendMessage(userId, message);
     }
 
-    private List<FloorPlanGroupDTO> fetchAvailableApartments(String communityName) {
-        CommunityConfig community = apartmentsConfig.getCommunities().stream()
-                .filter(c -> c.getName().equals(communityName)).findFirst().orElseThrow();
-        return client.fetchApartments(community.getCommunityId(), 10);
+    private List<FloorPlanGroupDTO> fetchAvailableApartments(String communityId) {
+        return client.fetchApartments(communityId, 10);
     }
 }
 

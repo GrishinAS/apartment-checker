@@ -24,8 +24,6 @@ public class LeasePrice {
     private Date availableDate;
 
     private Long dateTimestamp;
-    private Boolean isEarliestAvailable;
-    private Boolean isStartingPrice;
 
     @ManyToOne
     @JoinColumn(name = "object_id")

@@ -7,6 +7,7 @@ import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import jakarta.transaction.Transactional;
+import lombok.extern.slf4j.Slf4j;
 import org.hibernate.Hibernate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.jpa.domain.Specification;
@@ -18,6 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Service
+@Slf4j
 public class UserFilterService {
 
     private final UserFilterPreferenceRepository userFilterRepository;
@@ -47,11 +49,14 @@ public class UserFilterService {
 
         UserFilterPreference preference;
         if (existingPreference.isPresent()) {
+            log.debug("Updating existing user filters for user {}", userId);
             preference = existingPreference.get();
         } else {
-            preference = new UserFilterPreference();
-            preference.setUserId(userId);
-            preference.setCreatedAt(LocalDateTime.now());
+            log.debug("Creating new user filters for user {}", userId);
+            preference = UserFilterPreference.builder()
+                    .userId(userId)
+                    .createdAt(LocalDateTime.now())
+                    .build();
         }
 
         preference.setIsStudio(filters.getIsStudio());
@@ -76,21 +81,7 @@ public class UserFilterService {
 
         if (preference.isPresent()) {
             UserFilterPreference userPref = preference.get();
-            ApartmentFilter filterDTO = new ApartmentFilter();
-
-            filterDTO.setIsStudio(userPref.getIsStudio());
-            filterDTO.setMinBedrooms(userPref.getMinBedrooms());
-            filterDTO.setMaxBedrooms(userPref.getMaxBedrooms());
-            filterDTO.setMinBathrooms(userPref.getMinBathrooms());
-            filterDTO.setMaxBathrooms(userPref.getMaxBathrooms());
-            filterDTO.setMinPrice(userPref.getMinPrice());
-            filterDTO.setMaxPrice(userPref.getMaxPrice());
-            filterDTO.setMinFloor(userPref.getMinFloor());
-            filterDTO.setMaxFloor(userPref.getMaxFloor());
-            filterDTO.setMinDate(userPref.getAvailableFrom());
-            filterDTO.setMaxDate(userPref.getAvailableUntil());
-
-            return filterDTO;
+            return ApartmentFilter.createFrom(userPref);
         }
 
         return new ApartmentFilter();

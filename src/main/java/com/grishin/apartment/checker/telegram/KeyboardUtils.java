@@ -1,5 +1,6 @@
 package com.grishin.apartment.checker.telegram;
 
+import com.grishin.apartment.checker.dto.UnitMessage;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
@@ -57,22 +58,22 @@ public class KeyboardUtils {
         return markup;
     }
 
-    public static String alertAvailableUnitMessage(Unit unit) {
+    public static String alertAvailableUnitMessage(UnitMessage unit) {
         StringBuilder message = new StringBuilder();
         message.append("\n");
         message.append("<b>Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName()).append("</b>\n");
-        if (unit.getUnitIsStudio()) {
+        if (unit.isStudio()) {
             message.append("Studio");
         } else {
-            message.append("Bedrooms: ").append(unit.getFloorPlan().getFloorPlanBed()).append("\n");
-            message.append("Bathrooms: ").append(unit.getFloorPlan().getFloorPlanBath()).append("\n");
+            message.append("Bedrooms: ").append(unit.getBedrooms()).append("\n");
+            message.append("Bathrooms: ").append(unit.getBathrooms()).append("\n");
         }
-        message.append("Floor: ").append(unit.getUnitFloor()).append("\n");
-        message.append("Price: $").append(unit.getUnitEarliestAvailable().getPrice()).append("\n");
-        message.append("Floorplan: ").append(unit.getFloorPlan().getFloorPlanName()).append("\n");
+        message.append("Floor: ").append(unit.getFloor()).append("\n");
+        message.append("Price: $").append(unit.getPrice()).append("\n");
+        message.append("Floorplan: ").append(unit.getFloorPlanName()).append("\n");
         message.append("Amenities:\n");
-        unit.getAmenities().forEach(amenity -> message.append("   ").append(amenity.getAmenityName()).append("\n"));
-        Date availableDate = unit.getUnitEarliestAvailable().getAvailableDate();
+        unit.getAmenityNames().forEach(amenity -> message.append("   ").append(amenity).append("\n"));
+        Date availableDate = unit.getAvailableFrom();
         message.append("Available From: ").append(PRETTY_DATE_FORMAT.format(availableDate));
         message.append("\n");
         return message.toString();
