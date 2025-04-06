@@ -4,6 +4,8 @@ import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.*;
 import com.grishin.apartment.checker.storage.*;
 import com.grishin.apartment.checker.storage.entity.*;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
@@ -30,6 +32,8 @@ public class DataSyncService {
     private final UnitAmenityRepository unitAmenityRepository;
     private final UserFilterService userFilterService;
     private final UserFilterPreferenceRepository userFilterPreferenceRepository;
+    @PersistenceContext
+    private EntityManager entityManager;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
 
@@ -46,9 +50,9 @@ public class DataSyncService {
 
             
             if (apartmentData.getUnits() != null) {
-                for (AptDTO unit : apartmentData.getUnits()) {
-                    processUnit(unit, group);
-                    processedUnitIds.add(unit.getObjectID());
+                for (AptDTO apt : apartmentData.getUnits()) {
+                    processUnit(apt, group);
+                    processedUnitIds.add(apt.getObjectID());
                 }
             }
 
@@ -232,11 +236,9 @@ public class DataSyncService {
             else {
                 amenity = new UnitAmenity();
                 amenity.setAmenityName(amenityName);
-                //amenity.setUnits(Set.of(unit));
                 log.debug("Saving new amenity {} for unit {}", amenityName, unit.getObjectId());
                 amenity = unitAmenityRepository.save(amenity);
             }
-            //amenity.getUnits().add(unit);
             unit.getAmenities().add(amenity);
             log.debug("Amenity {} for unit {} saved", amenity.getId(), unit.getObjectId());
         }
@@ -269,11 +271,23 @@ public class DataSyncService {
         List<Unit> allUnits = unitRepository.findByCommunityId(communityId);
         List<Unit> removedUnits = allUnits.stream()
                 .filter(unit -> !processedUnitIds.contains(unit.getObjectId()))
+                .peek(unit -> log.debug("Unit: {}, managed: {}", unit.getObjectId(), entityManager.contains(unit)))
                 .toList();
+
+        for (Unit unit : removedUnits) {
+            for (UnitAmenity amenity : unit.getAmenities()) {
+                amenity.getUnits().remove(unit); // clear owning reference on the inverse side
+            }
+            unit.getAmenities().clear(); // clear owning side
+            unit.getFloorPlan().getUnits().remove(unit);
+        }
 
         if (!removedUnits.isEmpty()) {
             log.info("Detected {} removed units", removedUnits.size());
+            log.debug("Removed units: {}", removedUnits);
             unitRepository.deleteAll(removedUnits);
+            unitRepository.flush();
+            entityManager.clear();
         }
     }
 }

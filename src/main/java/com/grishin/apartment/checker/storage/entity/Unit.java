@@ -35,7 +35,7 @@ public class Unit {
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    @ManyToOne(cascade = CascadeType.PERSIST)
+    @ManyToOne(cascade = {CascadeType.PERSIST, CascadeType.REMOVE})
     @JoinColumn(name = "unit_earliest_available")
     private LeasePrice unitEarliestAvailable;
 
@@ -52,7 +52,7 @@ public class Unit {
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
+    @ManyToMany
     @JoinTable(
             name = "unit_amenity_mappings",
             joinColumns = @JoinColumn(name = "object_id"),
