@@ -76,7 +76,7 @@ public class DataSyncServiceTest {
                     assertTrue(unitOpt.isPresent(), "Unit " + aptDTO.getObjectID() + " should exist");
 
                     Unit unit = unitOpt.get();
-                    assertEquals(aptDTO.getUnitMarketingName(), unit.getUnitMarketingName()); // unitID is not unique
+                    assertEquals(aptDTO.getUnitMarketingName(), unit.getUnitMarketingName());
                     assertTrue(unit.getGroups().contains(group), "Unit " + aptDTO.getObjectID() + " should be associated with the group");
 
                     // Verify floor plan was created

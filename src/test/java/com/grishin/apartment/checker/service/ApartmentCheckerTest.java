@@ -10,8 +10,6 @@ import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
 import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import com.grishin.apartment.checker.telegram.MainBotController;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,7 +19,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.test.annotation.Rollback;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,8 +31,6 @@ import static org.mockito.Mockito.*;
 @ExtendWith(MockitoExtension.class)
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 @ActiveProfiles("test")
-@Rollback(false)
-@Transactional
 public class ApartmentCheckerTest {
 
     @Autowired
@@ -62,9 +57,6 @@ public class ApartmentCheckerTest {
     private UserFilterService userFilterService;
     @MockitoBean
     private ApartmentsConfig apartmentsConfig;
-
-    @PersistenceContext
-    private EntityManager entityManager;
 
 
     @BeforeEach
@@ -147,7 +139,6 @@ public class ApartmentCheckerTest {
         apartmentChecker.checkForNewApartments();
 
         // Verify new apartments were added
-        entityManager.clear();
         int unitsDeleted = 3;
         Assertions.assertEquals(initialUnitsCount - unitsDeleted, unitRepository.count());
 
