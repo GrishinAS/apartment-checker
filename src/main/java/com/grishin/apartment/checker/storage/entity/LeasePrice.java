@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.Date;
 
 @Entity
-@Table(name = "lease_prices")
+@Table(name = "lease_prices", indexes = { @Index(columnList = "object_id", unique = true) })
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
@@ -25,7 +25,7 @@ public class LeasePrice {
 
     private Long dateTimestamp;
 
-    @ManyToOne
+    @OneToOne
     @JoinColumn(name = "object_id")
     private Unit unit;
 }

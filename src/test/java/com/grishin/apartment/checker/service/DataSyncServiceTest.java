@@ -1,7 +1,5 @@
 package com.grishin.apartment.checker.service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.grishin.apartment.checker.TestDataProvider;
 import com.grishin.apartment.checker.config.ApartmentsConfig;
 import com.grishin.apartment.checker.dto.AptDTO;
@@ -13,14 +11,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.context.annotation.Import;
-import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 
@@ -81,8 +76,8 @@ public class DataSyncServiceTest {
                     assertTrue(unitOpt.isPresent(), "Unit " + aptDTO.getObjectID() + " should exist");
 
                     Unit unit = unitOpt.get();
-                    assertEquals(aptDTO.getUnitMarketingName(), unit.getUnitMarketingName()); // unitID is not unique
-                    assertTrue(unit.getGroups().contains(group), "Unit should be associated with the group");
+                    assertEquals(aptDTO.getUnitMarketingName(), unit.getUnitMarketingName());
+                    assertTrue(unit.getGroups().contains(group), "Unit " + aptDTO.getObjectID() + " should be associated with the group");
 
                     // Verify floor plan was created
                     assertNotNull(unit.getFloorPlan());

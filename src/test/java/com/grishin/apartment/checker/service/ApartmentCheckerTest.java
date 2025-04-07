@@ -15,18 +15,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.test.context.ActiveProfiles;
-import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.Optional;
 
 import static org.mockito.Mockito.*;
 
@@ -71,12 +68,16 @@ public class ApartmentCheckerTest {
     }
 
     @Test
-    void testUpdateData_FindNewApartmentsAndNotify() throws Exception { //two appartments? good json with updated thats gonna reveal the db issue, test deletion
+    void testUpdateData_FindNewApartmentsAndNotify() throws Exception { //two appartments?
+        // Mocks setup
         CommunityConfig communityConfig = new CommunityConfig("Mock ID", "Promenade");
         when(apartmentsConfig.getCommunities())
                 .thenReturn(List.of(communityConfig));
         Long userId = 11L;
-        UserFilterPreference userFilterPreference = UserFilterPreference.builder().userId(userId).selectedCommunity(communityConfig.getName()).build();
+        UserFilterPreference userFilterPreference = UserFilterPreference.builder()
+                .userId(userId)
+                .selectedCommunity(communityConfig.getName())
+                .build();
         when(userFilterRepository.findBySelectedCommunity(matches(communityConfig.getName())))
                 .thenReturn(List.of(userFilterPreference));
         List<FloorPlanGroupDTO> initialData = TestDataProvider.getInitialApartmentData();
@@ -99,9 +100,49 @@ public class ApartmentCheckerTest {
         apartmentChecker.checkForNewApartments();
 
         // Verify new apartments were added
-        Assertions.assertTrue(unitRepository.count() > initialUnitsCount);
+        int unitsAdded = 6;
+        Assertions.assertEquals(initialUnitsCount + unitsAdded, unitRepository.count());
 
         // Verify notification was sent
-        verify(bot, atLeastOnce()).sendMessage(anyLong(), anyString());
+        verify(bot, times(unitsAdded)).sendMessage(eq(userId), anyString());
+    }
+
+    @Test
+    void testDeleteData_DeleteOldApartments() throws Exception {
+        // Mocks setup
+        CommunityConfig communityConfig = new CommunityConfig("11584d39-2644-4b8e-8548-7c2a126c0570", "Promenade");
+        when(apartmentsConfig.getCommunities())
+                .thenReturn(List.of(communityConfig));
+        Long userId = 11L;
+        UserFilterPreference userFilterPreference = UserFilterPreference.builder().
+                userId(userId)
+                .selectedCommunity(communityConfig.getName()).build();
+        when(userFilterRepository.findBySelectedCommunity(matches(communityConfig.getName())))
+                .thenReturn(List.of(userFilterPreference));
+        List<FloorPlanGroupDTO> initialData = TestDataProvider.getInitialApartmentData();
+        when(client.fetchApartments(matches(communityConfig.getCommunityId()), anyInt()))
+                .thenReturn(initialData);
+
+        // Initial sync
+        apartmentChecker.syncApartmentData();
+
+        // Ensure data is loaded
+        long initialUnitsCount = initialData.stream().mapToLong(x -> x.getUnits().size()).sum();
+        Assertions.assertEquals(initialUnitsCount, unitRepository.count());
+
+        // Second JSON load with removed apartments
+        List<FloorPlanGroupDTO> updatedData = TestDataProvider.getUpdatedApartmentDataWithRemovedUnits();
+        when(client.fetchApartments(matches(communityConfig.getCommunityId()), anyInt()))
+                .thenReturn(updatedData);
+
+        // Run check for new apartments
+        apartmentChecker.checkForNewApartments();
+
+        // Verify new apartments were added
+        int unitsDeleted = 3;
+        Assertions.assertEquals(initialUnitsCount - unitsDeleted, unitRepository.count());
+
+        // Verify notification was sent
+        verify(bot, never()).sendMessage(anyLong(), anyString());
     }
 }

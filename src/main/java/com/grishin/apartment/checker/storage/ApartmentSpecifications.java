@@ -28,9 +28,7 @@ public class ApartmentSpecifications {
             Join<Unit, LeasePrice> leasePriceJoin = root.join("unitEarliestAvailable", JoinType.LEFT);
 
             if (optionalObjectIds != null) {
-                if (!optionalObjectIds.isEmpty()) {
-                    predicates.add(root.get("objectId").in(optionalObjectIds));
-                }
+                predicates.add(root.get("objectId").in(optionalObjectIds));
             }
 
             if (filter.getIsStudio() != null) {

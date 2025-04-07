@@ -6,19 +6,14 @@ import com.grishin.apartment.checker.dto.ApartmentFilter;
 import com.grishin.apartment.checker.dto.AptDTO;
 import com.grishin.apartment.checker.dto.FloorPlanGroupDTO;
 import com.grishin.apartment.checker.dto.UnitMessage;
-import com.grishin.apartment.checker.storage.ApartmentSpecifications;
-import com.grishin.apartment.checker.storage.UnitRepository;
-import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
-import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import com.grishin.apartment.checker.telegram.KeyboardUtils;
 import com.grishin.apartment.checker.telegram.MainBotController;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.jpa.domain.Specification;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.telegram.telegrambots.meta.exceptions.TelegramApiException;
 
 import java.util.HashMap;
@@ -68,7 +63,10 @@ public class ApartmentChecker {
                 for (UserFilterPreference userPref : usersThatSelectedCommunity) {
                     ApartmentFilter userFilters = ApartmentFilter.createFrom(userPref);
 
-                    List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community.getName()).stream().map(AptDTO::getObjectID).toList();
+                    List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community.getName())
+                            .stream()
+                            .map(AptDTO::getObjectID)
+                            .toList();
 
                     List<UnitMessage> filteredNewUnits = dataSyncService.findApartmentsByIdsWithFilters(userFilters, newApartmentsIdsForCommunity);
 
@@ -88,7 +86,7 @@ public class ApartmentChecker {
     }
 
 
-    //@PostConstruct
+    @PostConstruct
     public void syncApartmentData() {
         log.info("Starting apartment data synchronization");
         try {
@@ -104,8 +102,6 @@ public class ApartmentChecker {
             log.error("Error during apartment data synchronization", e);
         }
     }
-
-
 
     private void alertNewUnit(UnitMessage unit, Long userId) throws TelegramApiException {
         String message = KeyboardUtils.alertAvailableUnitMessage(unit);

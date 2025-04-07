@@ -8,7 +8,10 @@ apartments:
 logging:
   level:
     root: INFO
-    org.hibernate.SQL: ERROR
+    org.hibernate:
+      SQL: INFO
+      type.descriptor.sql: ERROR
+      engine.internal: ERROR
     com.grishin: DEBUG
 
 spring:
@@ -21,6 +24,4 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop
-    properties:
-      hibernate:
-        format_sql: true
+    show-sql: false

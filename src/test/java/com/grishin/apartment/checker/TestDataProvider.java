@@ -20,6 +20,10 @@ public class TestDataProvider {
         return parseFile(new TypeReference<>() {}, "apartment-update.json");
     }
 
+    public static List<FloorPlanGroupDTO> getUpdatedApartmentDataWithRemovedUnits() throws IOException {
+        return parseFile(new TypeReference<>() {}, "apartment-delete.json");
+    }
+
     public static List<FloorPlanGroupDTO> getSampleUnits() throws IOException {
         return parseFile(new TypeReference<>() {}, "irvine-apartment-sample.json");
     }

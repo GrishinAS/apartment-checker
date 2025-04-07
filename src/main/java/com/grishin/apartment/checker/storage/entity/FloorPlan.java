@@ -28,7 +28,7 @@ public class FloorPlan {
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    @OneToMany(mappedBy = "floorPlan", cascade = CascadeType.ALL)
+    @OneToMany(mappedBy = "floorPlan")
     private Set<Unit> units = new HashSet<>();
 
     @ToString.Exclude
