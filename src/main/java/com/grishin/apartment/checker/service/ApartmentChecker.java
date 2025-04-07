@@ -63,7 +63,10 @@ public class ApartmentChecker {
                 for (UserFilterPreference userPref : usersThatSelectedCommunity) {
                     ApartmentFilter userFilters = ApartmentFilter.createFrom(userPref);
 
-                    List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community.getName()).stream().map(AptDTO::getObjectID).toList();
+                    List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community.getName())
+                            .stream()
+                            .map(AptDTO::getObjectID)
+                            .toList();
 
                     List<UnitMessage> filteredNewUnits = dataSyncService.findApartmentsByIdsWithFilters(userFilters, newApartmentsIdsForCommunity);
 
@@ -99,8 +102,6 @@ public class ApartmentChecker {
             log.error("Error during apartment data synchronization", e);
         }
     }
-
-
 
     private void alertNewUnit(UnitMessage unit, Long userId) throws TelegramApiException {
         String message = KeyboardUtils.alertAvailableUnitMessage(unit);

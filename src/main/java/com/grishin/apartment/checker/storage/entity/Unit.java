@@ -35,7 +35,7 @@ public class Unit {
 
     @ToString.Exclude
     @EqualsAndHashCode.Exclude
-    @ManyToOne(cascade = {CascadeType.PERSIST, CascadeType.REMOVE})
+    @OneToOne(mappedBy = "unit", cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "unit_earliest_available")
     private LeasePrice unitEarliestAvailable;
 

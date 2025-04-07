@@ -9,7 +9,7 @@ logging:
   level:
     root: INFO
     org.hibernate:
-      SQL: DEBUG
+      SQL: INFO
       type.descriptor.sql: ERROR
       engine.internal: ERROR
     com.grishin: DEBUG
@@ -24,7 +24,4 @@ spring:
     database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: create-drop
-    show-sql: true
-    properties:
-      hibernate:
-        format_sql: true
+    show-sql: false

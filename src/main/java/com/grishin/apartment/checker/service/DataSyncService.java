@@ -4,8 +4,6 @@ import com.grishin.apartment.checker.config.CommunityConfig;
 import com.grishin.apartment.checker.dto.*;
 import com.grishin.apartment.checker.storage.*;
 import com.grishin.apartment.checker.storage.entity.*;
-import jakarta.persistence.EntityManager;
-import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.jpa.domain.Specification;
@@ -32,14 +30,13 @@ public class DataSyncService {
     private final UnitAmenityRepository unitAmenityRepository;
     private final UserFilterService userFilterService;
     private final UserFilterPreferenceRepository userFilterPreferenceRepository;
-    @PersistenceContext
-    private EntityManager entityManager;
+    private final LeasePriceRepository leasePriceRepository;
 
     private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyyMMdd");
 
     @Transactional
     public void processApartmentData(List<FloorPlanGroupDTO> apartmentDataList, String communityId) {
-        
+        log.info("Processing apartment data for community: {}", communityId);
         Set<String> processedUnitIds = new HashSet<>();
         int counter = 1;
         for (FloorPlanGroupDTO apartmentData : apartmentDataList) {
@@ -48,35 +45,15 @@ public class DataSyncService {
             FloorPlanGroup group = getOrCreateFloorPlanGroup(apartmentData.getGroupType());
             floorPlanGroupRepository.saveAndFlush(group);
 
-            
-            if (apartmentData.getUnits() != null) {
-                for (AptDTO apt : apartmentData.getUnits()) {
-                    processUnit(apt, group);
-                    processedUnitIds.add(apt.getObjectID());
-                }
+            for (AptDTO apt : apartmentData.getUnits()) {
+                processUnit(apt, group);
+                processedUnitIds.add(apt.getObjectID());
             }
 
-            if (apartmentData.getUnitIds() != null) {
-                for (String unitId : apartmentData.getUnitIds()) {
-                    Optional<Unit> unitOpt = unitRepository.findById(unitId);
-                    unitOpt.ifPresent(unit -> {
-                        // Check if the unit is already in the group to avoid duplicates
-                        boolean unitAlreadyInGroup = group.getUnits().stream()
-                                .anyMatch(u -> u.getObjectId().equals(unit.getObjectId()));
-
-                        if (!unitAlreadyInGroup) {
-                            group.getUnits().add(unit);
-                            unit.getGroups().add(group);
-                            unitRepository.save(unit);
-                        }
-                    });
-                }
-            }
-            
             floorPlanGroupRepository.save(group);
         }
-
         handleRemovedUnits(processedUnitIds, communityId);
+        log.debug("Processing apartment data for community: {} is finished", communityId);
     }
 
     public Set<String> getExistingUnits() {
@@ -100,6 +77,7 @@ public class DataSyncService {
         return unitEntities.stream().map(UnitMessage::fromEntity).toList();
     }
 
+    @Transactional
     public List<Unit> findApartmentsForUser(Long userId) {
         ApartmentFilter filters = userFilterService.getUserFilters(userId);
         return findApartmentsWithFilters(filters);
@@ -130,7 +108,6 @@ public class DataSyncService {
         processUnitAmenities(unit, aptDto.getUnitAmenities());
         
         processLeasePrice(unit, aptDto.getUnitEarliestAvailable());
-
     }
 
     private void addUnitToGroup(Unit unit, FloorPlanGroup group) {
@@ -218,6 +195,7 @@ public class DataSyncService {
         unit.setCommunity(community);
         unit.setFloorPlan(floorPlan);
 
+        log.debug("New unit {}", unit.getObjectId());
         return unitRepository.save(unit);
     }
 
@@ -252,6 +230,16 @@ public class DataSyncService {
     }
 
     private LeasePrice createLeasePrice(LeaseTermDTO leaseTermDTO, Unit unit) {
+        Optional<LeasePrice> priceOpt = leasePriceRepository.findByUnitObjectId(unit.getObjectId());
+        if (priceOpt.isPresent()) {
+            LeasePrice price = priceOpt.get();
+            log.debug("Lease price already exists for unit {}", unit.getObjectId());
+            if (price.getPrice().equals(leaseTermDTO.getPrice()) &&
+                    price.getDateTimestamp().equals(leaseTermDTO.getDateTimeStamp())) {
+                log.debug("Lease price is the same, skip");
+                return price;
+            }
+        }
         LeasePrice leasePrice = new LeasePrice();
         leasePrice.setPrice(leaseTermDTO.getPrice());
         leasePrice.setTerm(leaseTermDTO.getTerm());
@@ -261,7 +249,7 @@ public class DataSyncService {
         try {
             leasePrice.setAvailableDate(DATE_FORMAT.parse(leaseTermDTO.getDate()));
         } catch (ParseException e) {
-            log.warn("Could not parse date: " + leaseTermDTO.getDate(), e);
+            log.warn("Could not parse date: {}", leaseTermDTO.getDate(), e);
         }
         log.debug("Lease price created {}", leasePrice);
         return leasePrice;
@@ -271,23 +259,21 @@ public class DataSyncService {
         List<Unit> allUnits = unitRepository.findByCommunityId(communityId);
         List<Unit> removedUnits = allUnits.stream()
                 .filter(unit -> !processedUnitIds.contains(unit.getObjectId()))
-                .peek(unit -> log.debug("Unit: {}, managed: {}", unit.getObjectId(), entityManager.contains(unit)))
                 .toList();
 
+        log.info("Detected {} removed units", removedUnits.size());
         for (Unit unit : removedUnits) {
-            for (UnitAmenity amenity : unit.getAmenities()) {
-                amenity.getUnits().remove(unit); // clear owning reference on the inverse side
+            log.debug("Removing unit: {}", unit);
+            for (FloorPlanGroup group : unit.getGroups()) {
+                FloorPlanGroup managedGroup = floorPlanGroupRepository.findById(group.getGroupId()).orElseThrow();
+                managedGroup.getUnits().remove(unit);
             }
-            unit.getAmenities().clear(); // clear owning side
-            unit.getFloorPlan().getUnits().remove(unit);
-        }
-
-        if (!removedUnits.isEmpty()) {
-            log.info("Detected {} removed units", removedUnits.size());
-            log.debug("Removed units: {}", removedUnits);
-            unitRepository.deleteAll(removedUnits);
-            unitRepository.flush();
-            entityManager.clear();
+            unit.getGroups().clear();
+            for (UnitAmenity amenity : unit.getAmenities()) {
+                amenity.getUnits().remove(unit);
+            }
+            unit.getAmenities().clear();
+            unitRepository.delete(unit);
         }
     }
 }

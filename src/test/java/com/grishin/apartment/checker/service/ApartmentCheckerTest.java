@@ -8,7 +8,6 @@ import com.grishin.apartment.checker.storage.FloorPlanGroupRepository;
 import com.grishin.apartment.checker.storage.UnitAmenityRepository;
 import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
-import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import com.grishin.apartment.checker.telegram.MainBotController;
 import jakarta.persistence.EntityManager;
@@ -78,11 +77,15 @@ public class ApartmentCheckerTest {
 
     @Test
     void testUpdateData_FindNewApartmentsAndNotify() throws Exception { //two appartments?
+        // Mocks setup
         CommunityConfig communityConfig = new CommunityConfig("Mock ID", "Promenade");
         when(apartmentsConfig.getCommunities())
                 .thenReturn(List.of(communityConfig));
         Long userId = 11L;
-        UserFilterPreference userFilterPreference = UserFilterPreference.builder().userId(userId).selectedCommunity(communityConfig.getName()).build();
+        UserFilterPreference userFilterPreference = UserFilterPreference.builder()
+                .userId(userId)
+                .selectedCommunity(communityConfig.getName())
+                .build();
         when(userFilterRepository.findBySelectedCommunity(matches(communityConfig.getName())))
                 .thenReturn(List.of(userFilterPreference));
         List<FloorPlanGroupDTO> initialData = TestDataProvider.getInitialApartmentData();
@@ -106,7 +109,7 @@ public class ApartmentCheckerTest {
 
         // Verify new apartments were added
         int unitsAdded = 6;
-        Assertions.assertEquals(initialUnitsCount - unitsAdded, unitRepository.count());
+        Assertions.assertEquals(initialUnitsCount + unitsAdded, unitRepository.count());
 
         // Verify notification was sent
         verify(bot, times(unitsAdded)).sendMessage(eq(userId), anyString());
@@ -114,11 +117,14 @@ public class ApartmentCheckerTest {
 
     @Test
     void testDeleteData_DeleteOldApartments() throws Exception {
+        // Mocks setup
         CommunityConfig communityConfig = new CommunityConfig("11584d39-2644-4b8e-8548-7c2a126c0570", "Promenade");
         when(apartmentsConfig.getCommunities())
                 .thenReturn(List.of(communityConfig));
         Long userId = 11L;
-        UserFilterPreference userFilterPreference = UserFilterPreference.builder().userId(userId).selectedCommunity(communityConfig.getName()).build();
+        UserFilterPreference userFilterPreference = UserFilterPreference.builder().
+                userId(userId)
+                .selectedCommunity(communityConfig.getName()).build();
         when(userFilterRepository.findBySelectedCommunity(matches(communityConfig.getName())))
                 .thenReturn(List.of(userFilterPreference));
         List<FloorPlanGroupDTO> initialData = TestDataProvider.getInitialApartmentData();
@@ -147,17 +153,5 @@ public class ApartmentCheckerTest {
 
         // Verify notification was sent
         verify(bot, never()).sendMessage(anyLong(), anyString());
-    }
-
-    @Test
-    @Transactional
-    void testDeleteData() throws Exception {
-        Unit unit = new Unit();
-        unit.setObjectId("testId");
-        unitRepository.saveAndFlush(unit);
-
-        Assertions.assertEquals(1, unitRepository.count());
-        unitRepository.deleteById("testId");
-        Assertions.assertEquals(0, unitRepository.count());
     }
 }
