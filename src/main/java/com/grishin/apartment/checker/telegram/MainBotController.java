@@ -56,7 +56,7 @@ public class MainBotController extends TelegramLongPollingBot {
     private String botName;
 
     public MainBotController(
-            @Value("${telegram.bot.token}") String token,
+            @Value("${TELEGRAM_BOT_TOKEN}") String token,
             ApartmentsConfig apartmentsConfig,
             UserFilterService userFilterService,
             UnitAmenityRepository unitAmenityRepository) {
