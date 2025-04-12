@@ -310,7 +310,7 @@ public class MainBotController extends TelegramLongPollingBot {
             userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
             showPreferencesSummary(chatId);
         } else {
-            log.warn("Incorrect max date chosen: {}, another try", dateValue);
+            log.warn("Incorrect max date: {} is not between entered min date: {} and +3 months: {}, another try", dateValue, minDate, maxPossibleDate);
             sendMessage(chatId, "Entered date should be between minimum date and three months from today");
             sendDateRangeSlider(chatId, update);
         }
@@ -329,7 +329,7 @@ public class MainBotController extends TelegramLongPollingBot {
             userStates.put(chatId, ConversationState.SETTING_MAX_DATE);
             sendDateRangeSlider(chatId, update);
         } else {
-            log.warn("Incorrect min date chosen: {}, another try", dateValue);
+            log.warn("Incorrect min date: {}, is not between today: {} and +3 months: {}, another try", dateValue, today, maxPossibleDate);
             sendMessage(chatId, "Entered date should be between today and three months from today");
             sendDateRangeSlider(chatId, update);
         }
