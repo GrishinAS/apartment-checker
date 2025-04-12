@@ -73,6 +73,7 @@ export TELEGRAM_BOT_TOKEN=your_telegram_token
 export SQL_DB_USERNAME=sa
 export SQL_DB_PASSWORD=password
 
+chmod +x gradlew
 ./gradlew bootRun
 ```
 
