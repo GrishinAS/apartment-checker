@@ -18,6 +18,8 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
+import static com.grishin.apartment.checker.telegram.MainBotController.BOT_TIME_ZONE;
+
 @Service
 @Slf4j
 public class UserFilterService {
@@ -55,7 +57,7 @@ public class UserFilterService {
             log.debug("Creating new user filters for user {}", userId);
             preference = UserFilterPreference.builder()
                     .userId(userId)
-                    .createdAt(LocalDateTime.now())
+                    .createdAt(LocalDateTime.now(BOT_TIME_ZONE))
                     .build();
         }
 
@@ -70,7 +72,7 @@ public class UserFilterService {
         preference.setMaxFloor(filters.getMaxFloor());
         preference.setAvailableFrom(new Date(filters.getMinDate().getTime()));
         preference.setAvailableUntil(new Date(filters.getMaxDate().getTime()));
-        preference.setUpdatedAt(LocalDateTime.now());
+        preference.setUpdatedAt(LocalDateTime.now(BOT_TIME_ZONE));
         preference.setSelectedCommunity(selectedCommunity);
 
         userFilterRepository.save(preference);
