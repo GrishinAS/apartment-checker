@@ -51,6 +51,7 @@ public class MainBotController extends TelegramLongPollingBot {
     private final UnitAmenityRepository unitAmenityRepository;
 
     private final InlineCalendarBuilder inlineCalendarBuilder = new InlineCalendarBuilder(LanguageEnum.EN);
+    public static final ZoneId BOT_TIME_ZONE = ZoneId.of("America/Los_Angeles");
 
     @Value("${telegram.bot.name}")
     private String botName;
@@ -124,7 +125,7 @@ public class MainBotController extends TelegramLongPollingBot {
 
     private void handleDefaultState(String messageText, long chatId) throws TelegramApiException {
         switch (messageText) {
-            case "/start" -> {
+            case "/start", "/restart" -> {
                 sendCommunitySelection(chatId);
                 userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
                 userPreferences.put(chatId, new ApartmentFilter());
@@ -296,20 +297,20 @@ public class MainBotController extends TelegramLongPollingBot {
     private void handleMaxDateCallback(Date dateValue, long chatId, Update update) throws TelegramApiException {
         ApartmentFilter preferences = userPreferences.get(chatId);
         LocalDate enteredDate = dateValue.toInstant()
-                .atZone(ZoneId.systemDefault())
+                .atZone(BOT_TIME_ZONE)
                 .toLocalDate();
         Date savedMinDate = preferences.getMinDate();
         LocalDate minDate = savedMinDate.toInstant()
-                .atZone(ZoneId.systemDefault())
+                .atZone(BOT_TIME_ZONE)
                 .toLocalDate();
-        LocalDate maxPossibleDate = LocalDate.now().plusDays(MAX_DATE_RANGE_DAYS);
+        LocalDate maxPossibleDate = LocalDate.now(BOT_TIME_ZONE).plusDays(MAX_DATE_RANGE_DAYS);
         if (enteredDate.isAfter(minDate) && enteredDate.isBefore(maxPossibleDate)) {
             log.info("Setting max date to {}", dateValue);
             preferences.setMaxDate(dateValue);
             userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
             showPreferencesSummary(chatId);
         } else {
-            log.warn("Incorrect max date chosen: {}, another try", dateValue);
+            log.warn("Incorrect max date: {} is not between entered min date: {} and +3 months: {}, another try", dateValue, minDate, maxPossibleDate);
             sendMessage(chatId, "Entered date should be between minimum date and three months from today");
             sendDateRangeSlider(chatId, update);
         }
@@ -318,9 +319,9 @@ public class MainBotController extends TelegramLongPollingBot {
     private void handleMinDateCallback(Date dateValue, long chatId, Update update) throws TelegramApiException {
         ApartmentFilter preferences = userPreferences.get(chatId);
         LocalDate enteredDate = dateValue.toInstant()
-                .atZone(ZoneId.systemDefault())
+                .atZone(BOT_TIME_ZONE)
                 .toLocalDate();
-        LocalDate today = LocalDate.now();
+        LocalDate today = LocalDate.now(BOT_TIME_ZONE);
         LocalDate maxPossibleDate = today.plusDays(MAX_DATE_RANGE_DAYS);
         if (enteredDate.isAfter(today) && enteredDate.isBefore(maxPossibleDate)) {
             log.info("Setting min date to {}", dateValue);
@@ -328,7 +329,7 @@ public class MainBotController extends TelegramLongPollingBot {
             userStates.put(chatId, ConversationState.SETTING_MAX_DATE);
             sendDateRangeSlider(chatId, update);
         } else {
-            log.warn("Incorrect min date chosen: {}, another try", dateValue);
+            log.warn("Incorrect min date: {}, is not between today: {} and +3 months: {}, another try", dateValue, today, maxPossibleDate);
             sendMessage(chatId, "Entered date should be between today and three months from today");
             sendDateRangeSlider(chatId, update);
         }

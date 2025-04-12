@@ -25,7 +25,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
 	implementation 'io.github.dostonhamrakulov:java-telegram-bot-calendar:2.3'
-	implementation 'com.h2database:h2:2.2.224'
+	implementation 'org.postgresql:postgresql:42.7.5'
 	compileOnly 'org.projectlombok:lombok:1.18.30'
 	annotationProcessor 'org.projectlombok:lombok:1.18.30'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
