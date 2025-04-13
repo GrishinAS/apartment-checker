@@ -12,6 +12,8 @@ import java.util.Set;
 @Table(name = "user_filter_preferences")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class UserFilterPreference {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
