@@ -210,6 +210,10 @@ public class DataSyncService {
             if (amenityOptional.isPresent()) {
                 log.debug("Amenity is present {}", amenityOptional.get().getId());
                 amenity = amenityOptional.get();
+                if (unit.getAmenities().contains(amenity)) {
+                    log.debug("Amenity {} already exists for unit {}", amenity.getId(), unit.getObjectId());
+                    continue;
+                }
             }
             else {
                 amenity = new UnitAmenity();
@@ -231,16 +235,20 @@ public class DataSyncService {
 
     private LeasePrice createLeasePrice(LeaseTermDTO leaseTermDTO, Unit unit) {
         Optional<LeasePrice> priceOpt = leasePriceRepository.findByUnitObjectId(unit.getObjectId());
+        LeasePrice leasePrice;
         if (priceOpt.isPresent()) {
-            LeasePrice price = priceOpt.get();
-            log.debug("Lease price already exists for unit {}", unit.getObjectId());
-            if (price.getPrice().equals(leaseTermDTO.getPrice()) &&
-                    price.getDateTimestamp().equals(leaseTermDTO.getDateTimeStamp())) {
-                log.debug("Lease price is the same, skip");
-                return price;
+            leasePrice = priceOpt.get();
+            log.debug("Lease leasePrice already exists for unit {}", unit.getObjectId());
+            if (leasePrice.getPrice().equals(leaseTermDTO.getPrice()) &&
+                    leasePrice.getDateTimestamp().equals(leaseTermDTO.getDateTimeStamp())) {
+                log.debug("Lease leasePrice is the same, skip");
+                return leasePrice;
             }
         }
-        LeasePrice leasePrice = new LeasePrice();
+        else {
+            leasePrice = new LeasePrice();
+            log.debug("Lease leasePrice does not exist for unit {}. Creating new", unit.getObjectId());
+        }
         leasePrice.setPrice(leaseTermDTO.getPrice());
         leasePrice.setTerm(leaseTermDTO.getTerm());
         leasePrice.setDateTimestamp(leaseTermDTO.getDateTimeStamp());
