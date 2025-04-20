@@ -10,7 +10,7 @@ export TELEGRAM_BOT_TOKEN=
 
 ./gradlew bootJar
 
-java -Duser.timezone=PST -jar ./build/libs/apartment.checker-1.0.0.jar &
+java -Duser.timezone=PST8 -jar ./build/libs/apartment.checker-1.0.0.jar &
 APP_PID=$!
 
 echo $APP_PID >> java_pid
