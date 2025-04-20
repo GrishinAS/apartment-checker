@@ -39,7 +39,7 @@ import static java.util.stream.Collectors.toCollection;
 
 @Slf4j
 @Service
-public class MainBotController extends TelegramLongPollingBot {
+public class MainBotController extends TelegramLongPollingBot { // composition
     private final Map<Long, ConversationState> userStates = new HashMap<>();
     private final Map<Long, ApartmentFilter> userPreferences = new HashMap<>();
     private final Map<Long, String> selectedCommunities = new HashMap<>();
@@ -223,7 +223,7 @@ public class MainBotController extends TelegramLongPollingBot {
 
     private String generateApartmentListText(List<Unit> apartments, int page) {
         int pageSize = 5;
-        int totalPages = (int) Math.ceil((double) apartments.size() / pageSize);
+        int totalPages = (int) Math.ceil((double) apartments.size() / pageSize); // todo somehow 2
         int startIndex = page * pageSize;
         int endIndex = Math.min(startIndex + pageSize, apartments.size());
 
@@ -463,7 +463,7 @@ public class MainBotController extends TelegramLongPollingBot {
         SendMessage message = createMessageWithKeyboard(
                 chatId,
                 summaryMessage.toString(),
-                createKeyboardFromList(List.of("Confirm", "Restart"))
+                createKeyboardFromList(List.of("Confirm", "Restart")) // todo why is this left there forever
         );
         execute(message);
     }
@@ -480,8 +480,11 @@ public class MainBotController extends TelegramLongPollingBot {
 
     private void saveUserPreferences(long chatId) {
         ApartmentFilter gatheredPreferences = userPreferences.remove(chatId);
-        String selectedCommunity = selectedCommunities.remove(chatId);
-        userFilterService.saveUserFilters(chatId, selectedCommunity, gatheredPreferences);
+        String selectedCommunityName = selectedCommunities.remove(chatId);
+        CommunityConfig selectedCommunity = apartmentsConfig.getCommunities().stream()
+                .filter(c -> c.getName().equals(selectedCommunityName))
+                .findFirst().orElseThrow();
+        userFilterService.saveUserFilters(chatId, selectedCommunity.getCommunityId(), gatheredPreferences);
     }
 
     @Override

@@ -20,9 +20,11 @@ public class ApartmentFilter {
     private List<String> amenities;
     private Date minDate;
     private Date maxDate;
+    private String communityId;
 
     public static ApartmentFilter createFrom(UserFilterPreference filter) {
         ApartmentFilter apartmentFilter = new ApartmentFilter();
+        apartmentFilter.setCommunityId(filter.getSelectedCommunity());
         apartmentFilter.setIsStudio(filter.getIsStudio());
         apartmentFilter.setMinBedrooms(filter.getMinBedrooms());
         apartmentFilter.setMaxBedrooms(filter.getMaxBedrooms());

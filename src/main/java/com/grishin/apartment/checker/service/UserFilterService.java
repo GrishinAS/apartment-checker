@@ -46,7 +46,7 @@ public class UserFilterService {
     }
 
     @Transactional
-    public void saveUserFilters(Long userId, String selectedCommunity, ApartmentFilter filters) {
+    public void saveUserFilters(Long userId, String selectedCommunityId, ApartmentFilter filters) {
         Optional<UserFilterPreference> existingPreference = userFilterRepository.findByUserId(userId);
 
         UserFilterPreference preference;
@@ -73,7 +73,7 @@ public class UserFilterService {
         preference.setAvailableFrom(new Date(filters.getMinDate().getTime()));
         preference.setAvailableUntil(new Date(filters.getMaxDate().getTime()));
         preference.setUpdatedAt(LocalDateTime.now(BOT_TIME_ZONE));
-        preference.setSelectedCommunity(selectedCommunity);
+        preference.setSelectedCommunity(selectedCommunityId);
 
         userFilterRepository.save(preference);
     }

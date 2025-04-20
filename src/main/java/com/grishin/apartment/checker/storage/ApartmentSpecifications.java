@@ -1,10 +1,7 @@
 package com.grishin.apartment.checker.storage;
 
 import com.grishin.apartment.checker.dto.ApartmentFilter;
-import com.grishin.apartment.checker.storage.entity.FloorPlan;
-import com.grishin.apartment.checker.storage.entity.LeasePrice;
-import com.grishin.apartment.checker.storage.entity.Unit;
-import com.grishin.apartment.checker.storage.entity.UnitAmenity;
+import com.grishin.apartment.checker.storage.entity.*;
 import jakarta.annotation.Nullable;
 import jakarta.persistence.criteria.*;
 import org.springframework.data.jpa.domain.Specification;
@@ -25,10 +22,15 @@ public class ApartmentSpecifications {
             query.distinct(true);
 
             Join<Unit, FloorPlan> floorPlanJoin = root.join("floorPlan", JoinType.LEFT);
+            Join<Unit, Community> communityJoin = root.join("community", JoinType.INNER);
             Join<Unit, LeasePrice> leasePriceJoin = root.join("unitEarliestAvailable", JoinType.LEFT);
 
             if (optionalObjectIds != null) {
                 predicates.add(root.get("objectId").in(optionalObjectIds));
+            }
+
+            if (filter.getCommunityId() != null) {
+                predicates.add(criteriaBuilder.equal(communityJoin.get("id"), filter.getCommunityId()));
             }
 
             if (filter.getIsStudio() != null) {

@@ -61,7 +61,7 @@ public class KeyboardUtils {
     public static String alertAvailableUnitMessage(UnitMessage unit) {
         StringBuilder message = new StringBuilder();
         message.append("\n");
-        message.append("<b>Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName()).append("</b>\n");
+        message.append("*Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName()).append("*n");
         if (unit.isStudio()) {
             message.append("Studio");
         } else {
