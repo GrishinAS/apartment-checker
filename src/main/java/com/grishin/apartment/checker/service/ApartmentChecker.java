@@ -32,8 +32,6 @@ public class ApartmentChecker {
     private final DataSyncService dataSyncService;
     private final MainBotController bot;
 
-
-
     @Scheduled(fixedRateString = "${apartments.checkInterval}",  initialDelayString = "${apartments.checkInterval}", timeUnit = TimeUnit.MINUTES)
     public void checkForNewApartments() {
         log.info("Checking for new apartments");

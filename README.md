@@ -8,7 +8,16 @@ A Spring Boot application that periodically checks for newly listed apartments o
 
 - Retrieves new apartment listings at a configurable interval
 - Sends Telegram messages to users who subscribed to updates
-- Uses an H2 in-memory database for storing subscription and apartment data
+- Uses PostgreSQL for storing subscription and apartment data
+
+---
+
+## 🛠️ How It Works
+
+1. The app synchronize existing apps on startup and starts a scheduled task based on the interval specified in the config.
+2. It checks the target apartment rental website for new listings.
+3. Compares with previously fetched listings to detect new ones.
+4. Sends a Telegram message with the apartment info to all subscribed users.
 
 ---
 
@@ -24,14 +33,6 @@ To start receiving notifications about new apartment listings:
 
 3. Once you're subscribed, the bot will periodically check for new listings and notify you if they match your criteria.
 
-### Additional Commands
-
-- `/unsubscribe` — Stop receiving notifications about new apartments.
-- `/getCurrentAvailable` — Get a list of all currently available apartments that match your filter.
-
-> 💡 You can re-subscribe at any time by sending `/start` again and setting up a new filter.
----
-
 ## ⚙️ Configuration
 
 ### Required Environment Variables
@@ -46,21 +47,12 @@ You can provide these environment variables in your system, or create a `.env` f
 
 ### Custom Properties
 
-Configure the scraping interval in `application.yml` or `application.properties`:
+Configure the scraping interval in `application.yml`:
 
 ```yaml
 apartment-check:
-  interval: 10  # In minutes, 30 is the minimun
+  interval: 120  # In minutes
  ```
-
-## 🛠️ How It Works
-
-1. The app synchronize existing apps on startup and starts a scheduled task based on the interval specified in the config.  
-2. It checks the target apartment rental website for new listings.  
-3. Compares with previously fetched listings to detect new ones.  
-4. Sends a Telegram message with the apartment info to all subscribed users.  
-
----
 
 ## 🧪 Running Locally
 
@@ -73,9 +65,10 @@ export TELEGRAM_BOT_TOKEN=your_telegram_token
 export SQL_DB_USERNAME=sa
 export SQL_DB_PASSWORD=password
 
-chmod +x gradlew
 ./gradlew bootRun
 ```
+
+You can move start.sh and stop.sh scripts one level above the project folder and use them to start/stop the app and store credentials
 
 ## 🧾 API (Optional)
 
@@ -85,4 +78,7 @@ Methods mostly used for testing:
 - `/forceScheduledCheck` — Runs scheduled check ahead of time with notifications triggering
 
 
-
+## TODO 
+- Add multiple communities subscription support
+- Amenities filter fix
+- Bedrooms and bathroom filters
