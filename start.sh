@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# place this file and stop.sh one level above the project folder
+
 cd apartment-checker
 
 export SQL_DB_USERNAME=

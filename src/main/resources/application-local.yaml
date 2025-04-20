@@ -1,0 +1,34 @@
+apartments:
+  url: https://search.irvinecompanyapartments.com/units/rank
+  checkInterval: 120
+  communities:
+    - communityId: 11584d39-2644-4b8e-8548-7c2a126c0570
+      name: Promenade
+    - communityId: 460bfd6a-5f76-4e47-9d6d-2fa3d8f6fc11
+      name: Los Olivos
+
+logging:
+  level:
+    root: INFO
+    org.hibernate.SQL: INFO
+    com.grishin: DEBUG
+
+spring:
+  application.name: apartment.checker
+  datasource:
+    url: jdbc:postgresql://localhost/apartments
+    driverClassName: org.postgresql.Driver
+    username: ${SQL_DB_USERNAME}
+    password: ${SQL_DB_PASSWORD}
+
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+telegram.bot:
+  name: Irvine Company Apartment Checker Bot

@@ -4,7 +4,9 @@ import com.grishin.apartment.checker.dto.UnitMessage;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.InlineKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboard;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardMarkup;
+import org.telegram.telegrambots.meta.api.objects.replykeyboard.ReplyKeyboardRemove;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.InlineKeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardButton;
 import org.telegram.telegrambots.meta.api.objects.replykeyboard.buttons.KeyboardRow;
@@ -16,16 +18,16 @@ import java.util.List;
 
 public class KeyboardUtils {
     public static final int MAX_DATE_RANGE_DAYS = 90;
-    public static final int MIN_PRICE = 2000;
+    public static final int MIN_PRICE = 1000;
     public static final int MAX_PRICE = 5000;
     public static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("dd-MM-yyyy");
     public static final SimpleDateFormat PRETTY_DATE_FORMAT = new SimpleDateFormat("dd/MM/yyyy");
+    public static final int PAGE_SIZE = 5;
 
     public static InlineKeyboardMarkup generateApartmentListKeyboard(List<Unit> apartments, int page) {
-        int pageSize = 10;
-        int totalPages = (int) Math.ceil((double) apartments.size() / pageSize);
-        int startIndex = page * pageSize;
-        int endIndex = Math.min(startIndex + pageSize, apartments.size());
+        int totalPages = (int) Math.ceil((double) apartments.size() / PAGE_SIZE);
+        int startIndex = page * PAGE_SIZE;
+        int endIndex = Math.min(startIndex + PAGE_SIZE, apartments.size());
 
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
@@ -61,7 +63,7 @@ public class KeyboardUtils {
     public static String alertAvailableUnitMessage(UnitMessage unit) {
         StringBuilder message = new StringBuilder();
         message.append("\n");
-        message.append("*Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName()).append("*n");
+        message.append("<b>Apartment ").append(unit.getBuildingNumber()).append(" ").append(unit.getUnitMarketingName()).append("</b>\n");
         if (unit.isStudio()) {
             message.append("Studio");
         } else {
@@ -106,11 +108,18 @@ public class KeyboardUtils {
         return keyboardMarkup;
     }
 
-    public static SendMessage createMessageWithKeyboard(long chatId, String text, ReplyKeyboardMarkup keyboardMarkup) {
+    public static SendMessage createMessageWithKeyboard(long chatId, String text, ReplyKeyboard keyboardMarkup) {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(text);
         message.setReplyMarkup(keyboardMarkup);
         return message;
+    }
+
+    public static ReplyKeyboardRemove clearKeyboard() {
+        ReplyKeyboardRemove keyboard = new ReplyKeyboardRemove();
+        keyboard.setRemoveKeyboard(true);
+
+        return keyboard;
     }
 }

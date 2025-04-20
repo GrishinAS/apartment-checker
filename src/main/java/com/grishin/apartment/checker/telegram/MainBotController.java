@@ -16,7 +16,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.telegram.telegrambots.bots.TelegramLongPollingBot;
 import org.telegram.telegrambots.meta.TelegramBotsApi;
 import org.telegram.telegrambots.meta.api.methods.send.SendMessage;
 import org.telegram.telegrambots.meta.api.methods.updatingmessages.EditMessageReplyMarkup;
@@ -39,13 +38,14 @@ import static java.util.stream.Collectors.toCollection;
 
 @Slf4j
 @Service
-public class MainBotController extends TelegramLongPollingBot { // composition
+public class MainBotController {
     private final Map<Long, ConversationState> userStates = new HashMap<>();
     private final Map<Long, ApartmentFilter> userPreferences = new HashMap<>();
     private final Map<Long, String> selectedCommunities = new HashMap<>();
     private final Map<Long, Set<String>> userSelections = new ConcurrentHashMap<>();
     private final Map<Long, Integer> userPages = new ConcurrentHashMap<>();
 
+    private final TelegramBotClient botClient;
     private final ApartmentsConfig apartmentsConfig;
     private final UserFilterService userFilterService;
     private final UnitAmenityRepository unitAmenityRepository;
@@ -53,27 +53,24 @@ public class MainBotController extends TelegramLongPollingBot { // composition
     private final InlineCalendarBuilder inlineCalendarBuilder = new InlineCalendarBuilder(LanguageEnum.EN);
     public static final ZoneId BOT_TIME_ZONE = ZoneId.of("America/Los_Angeles");
 
-    @Value("${telegram.bot.name}")
-    private String botName;
-
     public MainBotController(
             @Value("${TELEGRAM_BOT_TOKEN}") String token,
+            @Value("${telegram.bot.name}") String botName,
             ApartmentsConfig apartmentsConfig,
             UserFilterService userFilterService,
             UnitAmenityRepository unitAmenityRepository) {
-        super(token);
         this.apartmentsConfig = apartmentsConfig;
         this.userFilterService = userFilterService;
         this.unitAmenityRepository = unitAmenityRepository;
+        this.botClient = new TelegramBotClient(token, botName, this::onUpdateReceived);
     }
 
     @PostConstruct
     public void register() throws TelegramApiException {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
-        botsApi.registerBot(this);
+        botsApi.registerBot(botClient);
     }
-
-    @Override
+    
     public void onUpdateReceived(Update update) {
         try {
             if (update.hasCallbackQuery()) {
@@ -89,6 +86,12 @@ public class MainBotController extends TelegramLongPollingBot { // composition
             if (!userStates.containsKey(chatId))
                 userStates.put(chatId, ConversationState.IDLE);
 
+            if (messageText.equalsIgnoreCase("restart")) {
+                log.info("Restart received. Restarting the session");
+                newChat(chatId);
+                return;
+            }
+
             ConversationState currentState = userStates.get(chatId);
             log.info("Received message '{}' in state '{}'", messageText, currentState);
             switch (currentState) {
@@ -99,11 +102,11 @@ public class MainBotController extends TelegramLongPollingBot { // composition
                     userStates.put(chatId, ConversationState.WAITING_FOR_AMENITIES);
                 }
                 case SETTING_MIN_PRICE -> {
-                    processPrice(chatId, messageText);
+                    processMinPrice(chatId, messageText);
                     sendPriceRequest(chatId);
                 }
                 case SETTING_MAX_PRICE -> {
-                    processPrice(chatId, messageText);
+                    processMaxPrice(chatId, messageText);
                     sendDateRangeSlider(chatId, update);
                 }
                 case REVIEW_PREFERENCES -> {
@@ -112,9 +115,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
                         sendFinalConfirmation(chatId);
                         userStates.put(chatId, ConversationState.IDLE);
                     } else if (messageText.equalsIgnoreCase("restart")) {
-                        sendCommunitySelection(chatId);
-                        userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
-                        userPreferences.put(chatId, new ApartmentFilter());
+                        newChat(chatId);
                     }
                 }
             }
@@ -125,12 +126,8 @@ public class MainBotController extends TelegramLongPollingBot { // composition
 
     private void handleDefaultState(String messageText, long chatId) throws TelegramApiException {
         switch (messageText) {
-            case "/start", "/restart" -> {
-                sendCommunitySelection(chatId);
-                userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
-                userPreferences.put(chatId, new ApartmentFilter());
-            }
-            case "/getCurrentAvailable" -> sendApartmentList(chatId);
+            case "/start" -> newChat(chatId);
+            case "/get_current_available" -> sendApartmentList(chatId);
             case "/unsubscribe" -> unsubscribeUser(chatId);
         }
     }
@@ -140,11 +137,10 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         userFilterService.clearUserFilters(chatId);
     }
 
-    public void sendMessage(long chatId, String text) throws TelegramApiException {
-        SendMessage sendMessage = new SendMessage();
-        sendMessage.setChatId(String.valueOf(chatId));
-        sendMessage.setText(text);
-        execute(sendMessage);
+    private void newChat(long chatId) throws TelegramApiException {
+        sendCommunitySelection(chatId);
+        userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
+        userPreferences.put(chatId, new ApartmentFilter());
     }
 
     private void handleCallbackQuery(Update update) {
@@ -169,7 +165,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
                 case "CAL_CM":
                     handleCalendarUpdate(update, parts, chatId, callbackData);
                     break;
-                case "page:":
+                case "page":
                     int page = Integer.parseInt(callbackData.substring(5));
                     userPages.put(chatId, page);
                     updateApartmentList(chatId, messageId);
@@ -198,7 +194,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         message.setReplyMarkup(generateApartmentListKeyboard(allApartments, currentPage));
         message.enableHtml(true);
 
-        execute(message);
+        botClient.execute(message);
     }
 
     @Transactional
@@ -218,22 +214,22 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         editMessage.setReplyMarkup(generateApartmentListKeyboard(apartmentsForUser, currentPage));
         editMessage.enableHtml(true);
 
-        execute(editMessage);
+        botClient.execute(editMessage);
     }
 
     private String generateApartmentListText(List<Unit> apartments, int page) {
-        int pageSize = 5;
-        int totalPages = (int) Math.ceil((double) apartments.size() / pageSize); // todo somehow 2
-        int startIndex = page * pageSize;
-        int endIndex = Math.min(startIndex + pageSize, apartments.size());
+
+        int totalPages = (int) Math.ceil((double) apartments.size() / PAGE_SIZE);
+        int startIndex = page * PAGE_SIZE;
+        int endIndex = Math.min(startIndex + PAGE_SIZE, apartments.size());
 
         StringBuilder sb = new StringBuilder();
-        sb.append("<b>Available Apartments</b> (Page ").append(page + 1).append(" of ").append(totalPages).append(")\n\n");
-
         if (startIndex >= apartments.size()) {
-            sb.append("No apartments to display on this page.");
+            sb.append("No relevant apartments found.");
             return sb.toString();
         }
+
+        sb.append("<b>Available Apartments</b> (Page ").append(page + 1).append(" of ").append(totalPages).append(")\n\n");
 
         for (int i = startIndex; i < endIndex; i++) {
             Unit apt = apartments.get(i);
@@ -259,7 +255,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         editMarkup.setMessageId(messageId);
         editMarkup.setReplyMarkup(generateSelectionKeyboard(chatId));
 
-        execute(editMarkup);
+        botClient.execute(editMarkup);
     }
 
     private void handleCalendarUpdate(Update update, String[] parts, long chatId, String callbackData) throws TelegramApiException, ParseException {
@@ -275,7 +271,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
                 else
                     sendMessage.setText("");
                 sendMessage.setReplyMarkup(inlineCalendarBuilder.build(update));
-                execute(sendMessage);
+                botClient.execute(sendMessage);
                 return;
             }
         }
@@ -304,7 +300,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
                 .atZone(BOT_TIME_ZONE)
                 .toLocalDate();
         LocalDate maxPossibleDate = LocalDate.now(BOT_TIME_ZONE).plusDays(MAX_DATE_RANGE_DAYS);
-        if (enteredDate.isAfter(minDate) && enteredDate.isBefore(maxPossibleDate)) {
+        if (enteredDate.isAfter(minDate) && (enteredDate.isEqual(maxPossibleDate) || enteredDate.isBefore(maxPossibleDate)))  {
             log.info("Setting max date to {}", dateValue);
             preferences.setMaxDate(dateValue);
             userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
@@ -323,7 +319,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
                 .toLocalDate();
         LocalDate today = LocalDate.now(BOT_TIME_ZONE);
         LocalDate maxPossibleDate = today.plusDays(MAX_DATE_RANGE_DAYS);
-        if (enteredDate.isAfter(today) && enteredDate.isBefore(maxPossibleDate)) {
+        if ((enteredDate.isEqual(today) || enteredDate.isAfter(today)) && (enteredDate.isEqual(maxPossibleDate) || enteredDate.isBefore(maxPossibleDate))) {
             log.info("Setting min date to {}", dateValue);
             preferences.setMinDate(dateValue);
             userStates.put(chatId, ConversationState.SETTING_MAX_DATE);
@@ -339,36 +335,65 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         ConversationState state = userStates.get(chatId);
         log.info("Sending price request to chatId: {} state : {}", chatId, state);
         String title;
-        if (state == ConversationState.SETTING_MIN_PRICE)
+        String buttonTest;
+        if (state == ConversationState.SETTING_MIN_PRICE) {
             title = "Set minimum price:";
-        else if (state == ConversationState.SETTING_MAX_PRICE)
+            buttonTest = "No Min Price";
+        }
+        else if (state == ConversationState.SETTING_MAX_PRICE) {
             title = "Set maximum price:";
+            buttonTest = "No Max Price";
+        }
         else throw new RuntimeException("Invalid state");
-        sendMessage(chatId, title);
+
+        SendMessage message = createMessageWithKeyboard(chatId, title, createKeyboardFromList(List.of(buttonTest)));
+        botClient.execute(message);
     }
 
-    private void processPrice(long chatId, String priceString) throws TelegramApiException {
-        int value = Integer.parseInt(priceString);
+    private void processMinPrice(long chatId, String priceString) throws TelegramApiException {
         ConversationState state = userStates.get(chatId);
-        log.info("Processing price: {}, state: {}", value, state);
+        log.info("Processing min price: {}, state: {}", priceString, state);
+
+        if (state != ConversationState.SETTING_MIN_PRICE)
+            throw new RuntimeException("Invalid state");
+
+        int value = priceString.equals("No Min Price") ? MIN_PRICE : Integer.parseInt(priceString);
+
         ApartmentFilter preferences = userPreferences.get(chatId);
         if (value > MAX_PRICE || value < MIN_PRICE) {
-            log.warn("Incorrect price chosen: {}, another try", priceString);
+            log.warn("Incorrect min price chosen: {}, another try", priceString);
             sendMessage(chatId, "Entered price should be between %d and %d".formatted(MIN_PRICE, MAX_PRICE));
             sendPriceRequest(chatId);
             return;
         }
-        if (state == ConversationState.SETTING_MIN_PRICE) {
-            log.info("Setting min price to {}", value);
-            preferences.setMinPrice(value);
-            userStates.put(chatId, ConversationState.SETTING_MAX_PRICE);
+
+        log.info("Setting min price to {}", value);
+        preferences.setMinPrice(value);
+        userStates.put(chatId, ConversationState.SETTING_MAX_PRICE);
+    }
+
+    private void processMaxPrice(long chatId, String priceString) throws TelegramApiException {
+        ConversationState state = userStates.get(chatId);
+        log.info("Processing max price: {}, state: {}", priceString, state);
+        if (state != ConversationState.SETTING_MAX_PRICE)
+            throw new RuntimeException("Invalid state");
+
+        int enteredMaxPrice = priceString.equals("No Max Price") ? MAX_PRICE : Integer.parseInt(priceString);
+        if (enteredMaxPrice > MAX_PRICE)
+            enteredMaxPrice = MAX_PRICE;
+
+        ApartmentFilter preferences = userPreferences.get(chatId);
+        Integer chosenMinPrice = preferences.getMinPrice();
+        if (enteredMaxPrice < chosenMinPrice) {
+            log.warn("Incorrect max price chosen: {}, another try", priceString);
+            sendMessage(chatId, "Entered price should be bigger than min price: %d".formatted(chosenMinPrice));
+            sendPriceRequest(chatId);
+            return;
         }
-        else if (state == ConversationState.SETTING_MAX_PRICE) {
-            log.info("Setting max price to {}", value);
-            preferences.setMaxPrice(value);
-            userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
-        }
-        else throw new RuntimeException("Invalid state");
+
+        log.info("Setting max price to {}", enteredMaxPrice);
+        preferences.setMaxPrice(enteredMaxPrice);
+        userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
     }
 
     private void sendCommunitySelection(long chatId) throws TelegramApiException {
@@ -378,7 +403,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
                 "Please select your preferred community:",
                 createKeyboardFromList(communities)
         );
-        execute(message);
+        botClient.execute(message);
     }
 
     private void sendAmenitiesOptions(long chatId) throws TelegramApiException {
@@ -388,7 +413,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         message.setChatId(String.valueOf(chatId));
         message.setText("Please select one or more options:");
         message.setReplyMarkup(generateSelectionKeyboard(chatId));
-        execute(message);
+        botClient.execute(message);
     }
 
     private InlineKeyboardMarkup generateSelectionKeyboard(long userId) {
@@ -440,7 +465,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         message.setText(title);
         message.setReplyMarkup(inlineCalendarBuilder.build(update));
 
-        execute(message);
+        botClient.execute(message);
     }
 
     private void showPreferencesSummary(long chatId) throws TelegramApiException {
@@ -453,7 +478,7 @@ public class MainBotController extends TelegramLongPollingBot { // composition
 
         summaryMessage.append("🏷️ Filters: ").append(prefs.getAmenities()).append("\n\n");
 
-        summaryMessage.append("💰 Price Range: ").append(prefs.getMinPrice()).append(" - ").append(prefs.getMaxPrice()).append(" ₽\n\n");
+        summaryMessage.append("💰 Price Range: ").append(prefs.getMinPrice()).append(" - ").append(prefs.getMaxPrice()).append(" $\n\n");
 
         Date minDate = prefs.getMinDate();
         Date maxDate = prefs.getMaxDate();
@@ -463,19 +488,20 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         SendMessage message = createMessageWithKeyboard(
                 chatId,
                 summaryMessage.toString(),
-                createKeyboardFromList(List.of("Confirm", "Restart")) // todo why is this left there forever
+                createKeyboardFromList(List.of("Confirm", "Restart"))
         );
-        execute(message);
+        botClient.execute(message);
     }
 
     private void sendFinalConfirmation(long chatId) throws TelegramApiException {
-        String message = """
+        String text = """
                 ✅ Your preferences have been saved! You will receive updates based on your criteria.
                 
-                Type /start to set new preferences anytime or /getCurrentAvailable if you want to see current available apartments by your criteria.
+                Type /start to set new preferences anytime or /get_current_available if you want to see current available apartments by your criteria.
                 
                 Type /unsubscribe to stop receiving updates.""";
-        sendMessage(chatId, message);
+        SendMessage message = createMessageWithKeyboard(chatId, text, clearKeyboard());
+        botClient.execute(message);
     }
 
     private void saveUserPreferences(long chatId) {
@@ -487,8 +513,10 @@ public class MainBotController extends TelegramLongPollingBot { // composition
         userFilterService.saveUserFilters(chatId, selectedCommunity.getCommunityId(), gatheredPreferences);
     }
 
-    @Override
-    public String getBotUsername() {
-        return botName;
+    public void sendMessage(long chatId, String text) throws TelegramApiException {
+        SendMessage sendMessage = new SendMessage();
+        sendMessage.setChatId(String.valueOf(chatId));
+        sendMessage.setText(text);
+        botClient.execute(sendMessage);
     }
 }
