@@ -1,6 +1,6 @@
 #!/bin/bash
 
-pid_file="java_pid"
+pid_file="apartment-checker/java_pid"
 
 if [ -f "$pid_file" ]; then
     pid=$(cat "$pid_file")
