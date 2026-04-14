@@ -14,6 +14,8 @@ logging:
     com.grishin: DEBUG
 
 spring:
+  main:
+    web-application-type: none
   application.name: apartment.checker
   datasource:
     url: jdbc:postgresql://apartments-db-free-tier.cx40gocy8bkr.us-east-2.rds.amazonaws.com/apartments

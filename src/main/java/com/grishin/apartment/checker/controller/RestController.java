@@ -3,8 +3,10 @@ package com.grishin.apartment.checker.controller;
 import com.grishin.apartment.checker.service.ApartmentChecker;
 import com.grishin.apartment.checker.service.DataSyncService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Profile;
 import org.springframework.web.bind.annotation.GetMapping;
 
+@Profile("local")
 @org.springframework.web.bind.annotation.RestController
 @RequiredArgsConstructor
 public class RestController {

@@ -14,6 +14,8 @@ logging:
     com.grishin: DEBUG
 
 spring:
+  main:
+    web-application-type: servlet
   application.name: apartment.checker
   datasource:
     url: jdbc:postgresql://localhost/apartments
