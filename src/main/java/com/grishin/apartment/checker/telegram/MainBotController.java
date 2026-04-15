@@ -362,7 +362,7 @@ public class MainBotController {
                 makeButton(floorsLabel(prefs), "filter:floors")
         ));
         keyboard.add(makeRow(
-                makeButton("Subscribe with current filters", "filter:subscribe")
+                makeButton("✓ Subscribe with current filters", "filter:subscribe")
         ));
 
         markup.setKeyboard(keyboard);
