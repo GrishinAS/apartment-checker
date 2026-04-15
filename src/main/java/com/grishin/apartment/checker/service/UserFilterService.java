@@ -70,8 +70,9 @@ public class UserFilterService {
         preference.setMaxPrice(filters.getMaxPrice());
         preference.setMinFloor(filters.getMinFloor());
         preference.setMaxFloor(filters.getMaxFloor());
-        preference.setAvailableFrom(new Date(filters.getMinDate().getTime()));
-        preference.setAvailableUntil(new Date(filters.getMaxDate().getTime()));
+        preference.setAvailableFrom(filters.getMinDate() != null ? new Date(filters.getMinDate().getTime()) : null);
+        preference.setAvailableUntil(filters.getMaxDate() != null ? new Date(filters.getMaxDate().getTime()) : null);
+        preference.setFloorplanName(filters.getFloorPlanNameContains());
         preference.setUpdatedAt(LocalDateTime.now(BOT_TIME_ZONE));
         preference.setSelectedCommunity(selectedCommunityId);
 

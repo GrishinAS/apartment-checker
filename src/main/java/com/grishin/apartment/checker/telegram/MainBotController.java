@@ -71,7 +71,7 @@ public class MainBotController {
         TelegramBotsApi botsApi = new TelegramBotsApi(DefaultBotSession.class);
         botsApi.registerBot(botClient);
     }
-    
+
     public void onUpdateReceived(Update update) {
         try {
             if (update.hasCallbackQuery()) {
@@ -99,26 +99,12 @@ public class MainBotController {
                 case IDLE -> handleDefaultState(messageText, chatId);
                 case WAITING_FOR_COMMUNITY -> {
                     processSelectedCommunity(chatId, messageText);
-                    sendAmenitiesOptions(chatId);
-                    userStates.put(chatId, ConversationState.WAITING_FOR_AMENITIES);
+                    sendFilterMenu(chatId);
                 }
-                case SETTING_MIN_PRICE -> {
-                    processMinPrice(chatId, messageText);
-                    sendPriceRequest(chatId);
-                }
-                case SETTING_MAX_PRICE -> {
-                    processMaxPrice(chatId, messageText);
-                    sendDateRangeSlider(chatId, update);
-                }
-                case REVIEW_PREFERENCES -> {
-                    if (messageText.equalsIgnoreCase("confirm")) {
-                        saveUserPreferences(chatId);
-                        sendFinalConfirmation(chatId);
-                        userStates.put(chatId, ConversationState.IDLE);
-                    } else if (messageText.equalsIgnoreCase("restart")) {
-                        newChat(chatId);
-                    }
-                }
+                case SETTING_MIN_PRICE -> processMinPrice(chatId, messageText);
+                case SETTING_MAX_PRICE -> processMaxPrice(chatId, messageText);
+                case SETTING_MIN_FLOOR -> processMinFloor(chatId, messageText);
+                case SETTING_MAX_FLOOR -> processMaxFloor(chatId, messageText);
             }
         } catch (Exception e) {
             log.error("Error during handling update", e);
@@ -160,8 +146,19 @@ public class MainBotController {
                 case "selection.done":
                     List<String> selectedAmenities = userSelections.remove(chatId).stream().toList();
                     userPreferences.get(chatId).setAmenities(selectedAmenities);
-                    userStates.put(chatId, ConversationState.SETTING_MIN_PRICE);
-                    sendPriceRequest(chatId);
+                    sendFilterMenu(chatId);
+                    break;
+                case "filter":
+                    handleFilterMenuCallback(parts[1], chatId, update);
+                    break;
+                case "unit_type":
+                    handleUnitTypeCallback(parts[1], chatId);
+                    break;
+                case "skip_dates":
+                    ApartmentFilter prefs = userPreferences.get(chatId);
+                    prefs.setMinDate(null);
+                    prefs.setMaxDate(null);
+                    sendFilterMenu(chatId);
                     break;
                 case "CAL_CM":
                     handleCalendarUpdate(update, parts, chatId, callbackData);
@@ -179,6 +176,250 @@ public class MainBotController {
         }
     }
 
+    private void handleFilterMenuCallback(String filterType, long chatId, Update update) throws TelegramApiException {
+        switch (filterType) {
+            case "amenities": {
+                List<String> existing = userPreferences.get(chatId).getAmenities();
+                userSelections.put(chatId, existing != null ? new HashSet<>(existing) : new HashSet<>());
+                userStates.put(chatId, ConversationState.WAITING_FOR_AMENITIES);
+                sendAmenitiesOptions(chatId);
+                break;
+            }
+            case "price":
+                userStates.put(chatId, ConversationState.SETTING_MIN_PRICE);
+                sendPriceRequest(chatId);
+                break;
+            case "dates":
+                userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
+                sendDateRangeSlider(chatId, update);
+                break;
+            case "unit_type":
+                userStates.put(chatId, ConversationState.SETTING_UNIT_TYPE);
+                sendUnitTypeOptions(chatId);
+                break;
+            case "floors":
+                userStates.put(chatId, ConversationState.SETTING_MIN_FLOOR);
+                sendFloorRequest(chatId);
+                break;
+            case "subscribe":
+                saveUserPreferences(chatId);
+                sendFinalConfirmation(chatId);
+                userStates.put(chatId, ConversationState.IDLE);
+                break;
+        }
+    }
+
+    private void handleUnitTypeCallback(String unitType, long chatId) throws TelegramApiException {
+        ApartmentFilter prefs = userPreferences.get(chatId);
+        switch (unitType) {
+            case "any":
+                prefs.setIsStudio(null);
+                prefs.setMinBedrooms(null);
+                prefs.setMaxBedrooms(null);
+                prefs.setMinBathrooms(null);
+                prefs.setMaxBathrooms(null);
+                prefs.setFloorPlanNameContains(null);
+                break;
+            case "studio":
+                prefs.setIsStudio(true);
+                prefs.setMinBedrooms(null);
+                prefs.setMaxBedrooms(null);
+                prefs.setMinBathrooms(null);
+                prefs.setMaxBathrooms(null);
+                prefs.setFloorPlanNameContains(null);
+                break;
+            case "1_1":
+                prefs.setIsStudio(false);
+                prefs.setMinBedrooms(1);
+                prefs.setMaxBedrooms(1);
+                prefs.setMinBathrooms(1);
+                prefs.setMaxBathrooms(1);
+                prefs.setFloorPlanNameContains(null);
+                break;
+            case "1_1_den":
+                prefs.setIsStudio(false);
+                prefs.setMinBedrooms(1);
+                prefs.setMaxBedrooms(1);
+                prefs.setMinBathrooms(1);
+                prefs.setMaxBathrooms(1);
+                prefs.setFloorPlanNameContains("den");
+                break;
+            case "2_2":
+                prefs.setIsStudio(false);
+                prefs.setMinBedrooms(2);
+                prefs.setMaxBedrooms(2);
+                prefs.setMinBathrooms(2);
+                prefs.setMaxBathrooms(2);
+                prefs.setFloorPlanNameContains(null);
+                break;
+            case "2_2_den":
+                prefs.setIsStudio(false);
+                prefs.setMinBedrooms(2);
+                prefs.setMaxBedrooms(2);
+                prefs.setMinBathrooms(2);
+                prefs.setMaxBathrooms(2);
+                prefs.setFloorPlanNameContains("den");
+                break;
+        }
+        sendFilterMenu(chatId);
+    }
+
+    private void sendUnitTypeOptions(long chatId) throws TelegramApiException {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+
+        keyboard.add(makeRow(
+                makeButton("Studio", "unit_type:studio"),
+                makeButton("Any (skip)", "unit_type:any")
+        ));
+        keyboard.add(makeRow(
+                makeButton("1bd / 1bath", "unit_type:1_1"),
+                makeButton("2bd / 2bath", "unit_type:2_2")
+        ));
+        keyboard.add(makeRow(
+                makeButton("1bd / 1bath + den", "unit_type:1_1_den"),
+                makeButton("2bd / 2bath + den", "unit_type:2_2_den")
+        ));
+
+        markup.setKeyboard(keyboard);
+
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText("Select unit type:");
+        message.setReplyMarkup(markup);
+        botClient.execute(message);
+    }
+
+    private void sendFilterMenu(long chatId) throws TelegramApiException {
+        ApartmentFilter prefs = userPreferences.get(chatId);
+        userStates.put(chatId, ConversationState.FILTER_MENU);
+
+        // Clear any active reply keyboard with a summary message, then show inline filter menu
+        SendMessage clearMsg = createMessageWithKeyboard(chatId, buildFilterSummaryText(prefs), clearKeyboard());
+        botClient.execute(clearMsg);
+
+        SendMessage menuMessage = new SendMessage();
+        menuMessage.setChatId(String.valueOf(chatId));
+        menuMessage.setText("Tap a filter to edit it:");
+        menuMessage.setReplyMarkup(buildFilterMenuKeyboard(prefs));
+        botClient.execute(menuMessage);
+    }
+
+    private String buildFilterSummaryText(ApartmentFilter prefs) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Current filters:\n\n");
+
+        List<String> amenities = prefs.getAmenities();
+        if (amenities != null && !amenities.isEmpty())
+            sb.append("Amenities: ").append(amenities.size()).append(" selected\n");
+        else
+            sb.append("Amenities: any\n");
+
+        Integer minP = prefs.getMinPrice();
+        Integer maxP = prefs.getMaxPrice();
+        if (minP != null || maxP != null)
+            sb.append("Price: $").append(minP != null ? minP : "any")
+              .append(" - $").append(maxP != null ? maxP : "any").append("\n");
+        else
+            sb.append("Price: any\n");
+
+        Date minD = prefs.getMinDate();
+        Date maxD = prefs.getMaxDate();
+        if (minD != null || maxD != null)
+            sb.append("Dates: ")
+              .append(minD != null ? formatDate(minD) : "any").append(" - ")
+              .append(maxD != null ? formatDate(maxD) : "any").append("\n");
+        else
+            sb.append("Dates: any\n");
+
+        sb.append("Unit type: ").append(getUnitTypeLabel(prefs)).append("\n");
+
+        Integer minF = prefs.getMinFloor();
+        Integer maxF = prefs.getMaxFloor();
+        if (minF != null || maxF != null)
+            sb.append("Floors: ")
+              .append(minF != null ? minF : "any").append(" - ")
+              .append(maxF != null ? maxF : "any").append("\n");
+        else
+            sb.append("Floors: any\n");
+
+        return sb.toString();
+    }
+
+    private InlineKeyboardMarkup buildFilterMenuKeyboard(ApartmentFilter prefs) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+
+        keyboard.add(makeRow(
+                makeButton(amenitiesLabel(prefs), "filter:amenities"),
+                makeButton(priceLabel(prefs), "filter:price")
+        ));
+        keyboard.add(makeRow(
+                makeButton(datesLabel(prefs), "filter:dates"),
+                makeButton("Unit: " + getUnitTypeLabel(prefs), "filter:unit_type")
+        ));
+        keyboard.add(makeRow(
+                makeButton(floorsLabel(prefs), "filter:floors")
+        ));
+        keyboard.add(makeRow(
+                makeButton("Subscribe with current filters", "filter:subscribe")
+        ));
+
+        markup.setKeyboard(keyboard);
+        return markup;
+    }
+
+    private String getUnitTypeLabel(ApartmentFilter prefs) {
+        if (Boolean.TRUE.equals(prefs.getIsStudio())) return "Studio";
+        if (prefs.getMinBedrooms() == null) return "any";
+        String base = prefs.getMinBedrooms() + "bd/" + prefs.getMinBathrooms() + "bath";
+        return prefs.getFloorPlanNameContains() != null ? base + "+den" : base;
+    }
+
+    private String amenitiesLabel(ApartmentFilter prefs) {
+        List<String> a = prefs.getAmenities();
+        return "Amenities" + (a != null && !a.isEmpty() ? ": " + a.size() + " sel." : " (any)");
+    }
+
+    private String priceLabel(ApartmentFilter prefs) {
+        Integer min = prefs.getMinPrice();
+        Integer max = prefs.getMaxPrice();
+        if (min != null && max != null) return "Price: $" + min + "-$" + max;
+        if (min != null) return "Price: $" + min + "+";
+        if (max != null) return "Price: up to $" + max;
+        return "Price (any)";
+    }
+
+    private String datesLabel(ApartmentFilter prefs) {
+        Date minD = prefs.getMinDate();
+        Date maxD = prefs.getMaxDate();
+        if (minD != null || maxD != null) {
+            String from = minD != null ? PRETTY_DATE_FORMAT.format(minD) : "any";
+            String to = maxD != null ? PRETTY_DATE_FORMAT.format(maxD) : "any";
+            return "Dates: " + from + "-" + to;
+        }
+        return "Dates (any)";
+    }
+
+    private String floorsLabel(ApartmentFilter prefs) {
+        Integer min = prefs.getMinFloor();
+        Integer max = prefs.getMaxFloor();
+        if (min != null && max != null) return "Floors: " + min + "-" + max;
+        if (min != null) return "Floors: " + min + "+";
+        if (max != null) return "Floors: up to " + max;
+        return "Floors (any)";
+    }
+
+    private InlineKeyboardButton makeButton(String text, String callbackData) {
+        InlineKeyboardButton button = new InlineKeyboardButton();
+        button.setText(text);
+        button.setCallbackData(callbackData);
+        return button;
+    }
+
+    private List<InlineKeyboardButton> makeRow(InlineKeyboardButton... buttons) {
+        return new ArrayList<>(Arrays.asList(buttons));
+    }
 
     private void sendApartmentList(long chatId) throws TelegramApiException {
         int currentPage = userPages.getOrDefault(chatId, 0);
@@ -219,7 +460,6 @@ public class MainBotController {
     }
 
     private String generateApartmentListText(List<Unit> apartments, int page) {
-
         int totalPages = (int) Math.ceil((double) apartments.size() / PAGE_SIZE);
         int startIndex = page * PAGE_SIZE;
         int endIndex = Math.min(startIndex + PAGE_SIZE, apartments.size());
@@ -242,12 +482,10 @@ public class MainBotController {
 
     private void toggleSelection(long chatId, String option) {
         Set<String> selections = userSelections.computeIfAbsent(chatId, k -> new HashSet<>());
-
-        if (selections.contains(option)) {
+        if (selections.contains(option))
             selections.remove(option);
-        } else {
+        else
             selections.add(option);
-        }
     }
 
     private void updateKeyboard(long chatId, int messageId) throws TelegramApiException {
@@ -255,7 +493,6 @@ public class MainBotController {
         editMarkup.setChatId(String.valueOf(chatId));
         editMarkup.setMessageId(messageId);
         editMarkup.setReplyMarkup(generateSelectionKeyboard(chatId));
-
         botClient.execute(editMarkup);
     }
 
@@ -271,7 +508,7 @@ public class MainBotController {
                     sendMessage.setText(message.getText());
                 else
                     sendMessage.setText("");
-                sendMessage.setReplyMarkup(inlineCalendarBuilder.build(update));
+                sendMessage.setReplyMarkup(buildCalendarMarkup(update));
                 botClient.execute(sendMessage);
                 return;
             }
@@ -284,28 +521,34 @@ public class MainBotController {
             case SETTING_MIN_DATE:
                 handleMinDateCallback(chosenDate, chatId, update);
                 break;
-
             case SETTING_MAX_DATE:
                 handleMaxDateCallback(chosenDate, chatId, update);
                 break;
         }
     }
 
+    private InlineKeyboardMarkup buildCalendarMarkup(Update update) {
+        InlineKeyboardMarkup calendar = inlineCalendarBuilder.build(update);
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>(calendar.getKeyboard());
+        keyboard.add(makeRow(makeButton("Skip / Any date", "skip_dates")));
+        calendar.setKeyboard(keyboard);
+        return calendar;
+    }
+
     private void handleMaxDateCallback(Date dateValue, long chatId, Update update) throws TelegramApiException {
         ApartmentFilter preferences = userPreferences.get(chatId);
         LocalDate enteredDate = dateValue.toInstant()
-                .atZone(BOT_TIME_ZONE)
+                .atZone(ZoneOffset.UTC)
                 .toLocalDate();
         Date savedMinDate = preferences.getMinDate();
         LocalDate minDate = savedMinDate.toInstant()
-                .atZone(BOT_TIME_ZONE)
+                .atZone(ZoneOffset.UTC)
                 .toLocalDate();
         LocalDate maxPossibleDate = LocalDate.now(BOT_TIME_ZONE).plusDays(MAX_DATE_RANGE_DAYS);
-        if (enteredDate.isAfter(minDate) && (enteredDate.isEqual(maxPossibleDate) || enteredDate.isBefore(maxPossibleDate)))  {
+        if (enteredDate.isAfter(minDate) && (enteredDate.isEqual(maxPossibleDate) || enteredDate.isBefore(maxPossibleDate))) {
             log.info("Setting max date to {}", dateValue);
             preferences.setMaxDate(dateValue);
-            userStates.put(chatId, ConversationState.REVIEW_PREFERENCES);
-            showPreferencesSummary(chatId);
+            sendFilterMenu(chatId);
         } else {
             log.warn("Incorrect max date: {} is not between entered min date: {} and +3 months: {}, another try", dateValue, minDate, maxPossibleDate);
             sendMessage(chatId, "Entered date should be between minimum date and three months from today");
@@ -336,30 +579,26 @@ public class MainBotController {
         ConversationState state = userStates.get(chatId);
         log.info("Sending price request to chatId: {} state : {}", chatId, state);
         String title;
-        String buttonTest;
+        String skipButton;
         if (state == ConversationState.SETTING_MIN_PRICE) {
             title = "Set minimum price:";
-            buttonTest = "No Min Price";
-        }
-        else if (state == ConversationState.SETTING_MAX_PRICE) {
+            skipButton = "No Min Price";
+        } else if (state == ConversationState.SETTING_MAX_PRICE) {
             title = "Set maximum price:";
-            buttonTest = "No Max Price";
-        }
-        else throw new RuntimeException("Invalid state");
+            skipButton = "No Max Price";
+        } else throw new RuntimeException("Invalid state");
 
-        SendMessage message = createMessageWithKeyboard(chatId, title, createKeyboardFromList(List.of(buttonTest)));
+        SendMessage message = createMessageWithKeyboard(chatId, title, createKeyboardFromList(List.of(skipButton, "Cancel")));
         botClient.execute(message);
     }
 
     private void processMinPrice(long chatId, String priceString) throws TelegramApiException {
-        ConversationState state = userStates.get(chatId);
-        log.info("Processing min price: {}, state: {}", priceString, state);
-
-        if (state != ConversationState.SETTING_MIN_PRICE)
-            throw new RuntimeException("Invalid state");
+        if (priceString.equals("Cancel")) {
+            sendFilterMenu(chatId);
+            return;
+        }
 
         int value = priceString.equals("No Min Price") ? MIN_PRICE : Integer.parseInt(priceString);
-
         ApartmentFilter preferences = userPreferences.get(chatId);
         if (value > MAX_PRICE || value < MIN_PRICE) {
             log.warn("Incorrect min price chosen: {}, another try", priceString);
@@ -371,13 +610,14 @@ public class MainBotController {
         log.info("Setting min price to {}", value);
         preferences.setMinPrice(value);
         userStates.put(chatId, ConversationState.SETTING_MAX_PRICE);
+        sendPriceRequest(chatId);
     }
 
     private void processMaxPrice(long chatId, String priceString) throws TelegramApiException {
-        ConversationState state = userStates.get(chatId);
-        log.info("Processing max price: {}, state: {}", priceString, state);
-        if (state != ConversationState.SETTING_MAX_PRICE)
-            throw new RuntimeException("Invalid state");
+        if (priceString.equals("Cancel")) {
+            sendFilterMenu(chatId);
+            return;
+        }
 
         int enteredMaxPrice = priceString.equals("No Max Price") ? MAX_PRICE : Integer.parseInt(priceString);
         if (enteredMaxPrice > MAX_PRICE)
@@ -385,7 +625,7 @@ public class MainBotController {
 
         ApartmentFilter preferences = userPreferences.get(chatId);
         Integer chosenMinPrice = preferences.getMinPrice();
-        if (enteredMaxPrice < chosenMinPrice) {
+        if (chosenMinPrice != null && enteredMaxPrice < chosenMinPrice) {
             log.warn("Incorrect max price chosen: {}, another try", priceString);
             sendMessage(chatId, "Entered price should be bigger than min price: %d".formatted(chosenMinPrice));
             sendPriceRequest(chatId);
@@ -394,7 +634,67 @@ public class MainBotController {
 
         log.info("Setting max price to {}", enteredMaxPrice);
         preferences.setMaxPrice(enteredMaxPrice);
-        userStates.put(chatId, ConversationState.SETTING_MIN_DATE);
+        sendFilterMenu(chatId);
+    }
+
+    private void sendFloorRequest(long chatId) throws TelegramApiException {
+        ConversationState state = userStates.get(chatId);
+        String title;
+        String skipButton;
+        if (state == ConversationState.SETTING_MIN_FLOOR) {
+            title = "Enter minimum floor:";
+            skipButton = "No Min Floor";
+        } else if (state == ConversationState.SETTING_MAX_FLOOR) {
+            title = "Enter maximum floor:";
+            skipButton = "No Max Floor";
+        } else throw new RuntimeException("Invalid state");
+
+        SendMessage message = createMessageWithKeyboard(chatId, title, createKeyboardFromList(List.of(skipButton, "Cancel")));
+        botClient.execute(message);
+    }
+
+    private void processMinFloor(long chatId, String floorString) throws TelegramApiException {
+        if (floorString.equals("Cancel")) {
+            sendFilterMenu(chatId);
+            return;
+        }
+
+        ApartmentFilter prefs = userPreferences.get(chatId);
+        if (floorString.equals("No Min Floor")) {
+            prefs.setMinFloor(null);
+        } else {
+            int floor = Integer.parseInt(floorString.trim());
+            if (floor < 1) {
+                sendMessage(chatId, "Floor must be at least 1");
+                sendFloorRequest(chatId);
+                return;
+            }
+            prefs.setMinFloor(floor);
+        }
+        userStates.put(chatId, ConversationState.SETTING_MAX_FLOOR);
+        sendFloorRequest(chatId);
+    }
+
+    private void processMaxFloor(long chatId, String floorString) throws TelegramApiException {
+        if (floorString.equals("Cancel")) {
+            sendFilterMenu(chatId);
+            return;
+        }
+
+        ApartmentFilter prefs = userPreferences.get(chatId);
+        if (floorString.equals("No Max Floor")) {
+            prefs.setMaxFloor(null);
+        } else {
+            int floor = Integer.parseInt(floorString.trim());
+            Integer minFloor = prefs.getMinFloor();
+            if (minFloor != null && floor < minFloor) {
+                sendMessage(chatId, "Maximum floor must be greater than minimum floor: " + minFloor);
+                sendFloorRequest(chatId);
+                return;
+            }
+            prefs.setMaxFloor(floor);
+        }
+        sendFilterMenu(chatId);
     }
 
     private void sendCommunitySelection(long chatId) throws TelegramApiException {
@@ -408,11 +708,9 @@ public class MainBotController {
     }
 
     private void sendAmenitiesOptions(long chatId) throws TelegramApiException {
-        userSelections.put(chatId, new HashSet<>());
-
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
-        message.setText("Please select one or more options:");
+        message.setText("Select amenities, or tap Done to skip:");
         message.setReplyMarkup(generateSelectionKeyboard(chatId));
         botClient.execute(message);
     }
@@ -427,26 +725,16 @@ public class MainBotController {
         List<InlineKeyboardButton> currentRow = null;
         for (int i = 0; i < amenities.size(); i++) {
             String option = amenities.get(i);
-            InlineKeyboardButton button = new InlineKeyboardButton();
-
             String text = selections.contains(option) ? "✅ " + option : "⬜️ " + option;
-            button.setText(text);
-            button.setCallbackData("select:" + option);
 
             if (i % 2 == 0) {
                 currentRow = new ArrayList<>();
                 keyboard.add(currentRow);
             }
-            currentRow.add(button);
+            currentRow.add(makeButton(text, "select:" + option));
         }
 
-        InlineKeyboardButton doneButton = new InlineKeyboardButton();
-        doneButton.setText("Done ✓");
-        doneButton.setCallbackData("selection.done");
-
-        List<InlineKeyboardButton> doneRow = new ArrayList<>();
-        doneRow.add(doneButton);
-        keyboard.add(doneRow);
+        keyboard.add(makeRow(makeButton("Done ✓", "selection.done")));
 
         markup.setKeyboard(keyboard);
         return markup;
@@ -468,42 +756,16 @@ public class MainBotController {
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
         message.setText(title);
-        message.setReplyMarkup(inlineCalendarBuilder.build(update));
-
-        botClient.execute(message);
-    }
-
-    private void showPreferencesSummary(long chatId) throws TelegramApiException {
-        ApartmentFilter prefs = userPreferences.get(chatId);
-        String selectedCommunity = selectedCommunities.get(chatId);
-
-        StringBuilder summaryMessage = new StringBuilder();
-        summaryMessage.append("⭐ Your Preferences Summary ⭐\n\n");
-        summaryMessage.append("🏠 Community: ").append(selectedCommunity).append("\n\n");
-
-        summaryMessage.append("🏷️ Filters: ").append(prefs.getAmenities()).append("\n\n");
-
-        summaryMessage.append("💰 Price Range: ").append(prefs.getMinPrice()).append(" - ").append(prefs.getMaxPrice()).append(" $\n\n");
-
-        Date minDate = prefs.getMinDate();
-        Date maxDate = prefs.getMaxDate();
-        summaryMessage.append("📅 Date Range: ").append(formatDate(minDate)).append(" - ").append(formatDate(maxDate)).append("\n\n");
-
-        summaryMessage.append("Is this correct? Press 'confirm' to save or 'restart' to begin again.");
-        SendMessage message = createMessageWithKeyboard(
-                chatId,
-                summaryMessage.toString(),
-                createKeyboardFromList(List.of("Confirm", "Restart"))
-        );
+        message.setReplyMarkup(buildCalendarMarkup(update));
         botClient.execute(message);
     }
 
     private void sendFinalConfirmation(long chatId) throws TelegramApiException {
         String text = """
-                ✅ Your preferences have been saved! You will receive updates based on your criteria.
-                
-                Type /start to set new preferences anytime or /get_current_available if you want to see current available apartments by your criteria.
-                
+                Your preferences have been saved! You will receive updates based on your criteria.
+
+                Type /start to set new preferences anytime or /get_current_available to see current available apartments.
+
                 Type /unsubscribe to stop receiving updates.""";
         SendMessage message = createMessageWithKeyboard(chatId, text, clearKeyboard());
         botClient.execute(message);

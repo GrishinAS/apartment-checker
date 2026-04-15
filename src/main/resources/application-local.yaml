@@ -18,15 +18,15 @@ spring:
     web-application-type: servlet
   application.name: apartment.checker
   datasource:
-    url: jdbc:postgresql://localhost/apartments
-    driverClassName: org.postgresql.Driver
+    url: jdbc:h2:mem:apartments;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driverClassName: org.h2.Driver
     username: ${SQL_DB_USERNAME}
     password: ${SQL_DB_PASSWORD}
 
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     show-sql: false
     properties:
       hibernate:
