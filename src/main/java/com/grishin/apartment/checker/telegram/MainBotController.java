@@ -30,6 +30,7 @@ import org.telegram.telegrambots.updatesreceivers.DefaultBotSession;
 import java.text.ParseException;
 import java.time.LocalDate;
 import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -315,7 +316,7 @@ public class MainBotController {
     private void handleMinDateCallback(Date dateValue, long chatId, Update update) throws TelegramApiException {
         ApartmentFilter preferences = userPreferences.get(chatId);
         LocalDate enteredDate = dateValue.toInstant()
-                .atZone(BOT_TIME_ZONE)
+                .atZone(ZoneOffset.UTC)
                 .toLocalDate();
         LocalDate today = LocalDate.now(BOT_TIME_ZONE);
         LocalDate maxPossibleDate = today.plusDays(MAX_DATE_RANGE_DAYS);
@@ -423,16 +424,20 @@ public class MainBotController {
         InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
         List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
 
-        for (String option : amenities) {
+        List<InlineKeyboardButton> currentRow = null;
+        for (int i = 0; i < amenities.size(); i++) {
+            String option = amenities.get(i);
             InlineKeyboardButton button = new InlineKeyboardButton();
 
             String text = selections.contains(option) ? "✅ " + option : "⬜️ " + option;
             button.setText(text);
             button.setCallbackData("select:" + option);
 
-            List<InlineKeyboardButton> row = new ArrayList<>();
-            row.add(button);
-            keyboard.add(row);
+            if (i % 2 == 0) {
+                currentRow = new ArrayList<>();
+                keyboard.add(currentRow);
+            }
+            currentRow.add(button);
         }
 
         InlineKeyboardButton doneButton = new InlineKeyboardButton();

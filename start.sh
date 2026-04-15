@@ -8,9 +8,9 @@ export SQL_DB_USERNAME=
 export SQL_DB_PASSWORD=
 export TELEGRAM_BOT_TOKEN=
 
-./gradlew bootJar
+./gradlew clean bootJar --no-daemon
 
-java -Duser.timezone=PST8 -jar ./build/libs/apartment.checker-1.0.0.jar &
+java -Duser.timezone=PST8  -jar ./build/libs/apartment.checker-1.0.0.jar & # -Xmx512m -XX:+UseSerialGC -XX:MaxMetaspaceSize=128m for small memory vms
 APP_PID=$!
 
 echo $APP_PID > java_pid
