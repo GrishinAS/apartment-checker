@@ -80,5 +80,5 @@ Methods mostly used for testing:
 
 ## TODO 
 - Add multiple communities subscription support
-- Amenities filter fix
-- Bedrooms and bathroom filters
+- Add plan preview button
+- Fix any max date causes entire date filter skip
