@@ -96,6 +96,12 @@ public class MainBotController {
                 return;
             }
 
+            if (messageText.startsWith("/")) {
+                cancelCurrentFlow(chatId);
+                handleDefaultState(messageText, chatId);
+                return;
+            }
+
             ConversationState currentState = userStates.get(chatId);
             log.info("Received message '{}' in state '{}'", messageText, currentState);
             switch (currentState) {
