@@ -57,11 +57,16 @@ public class UserFilterService {
             });
             log.debug("Updating existing filter {} for user {}", existingFilterId, userId);
         } else {
-            log.debug("Creating new filter for user {}", userId);
-            preference = UserFilterPreference.builder()
-                    .userId(userId)
-                    .createdAt(LocalDateTime.now(BOT_TIME_ZONE))
-                    .build();
+            preference = userFilterRepository.findByUserIdAndSelectedCommunity(userId, selectedCommunityId)
+                    .orElseGet(() -> {
+                        log.debug("Creating new filter for user {} community {}", userId, selectedCommunityId);
+                        return UserFilterPreference.builder()
+                                .userId(userId)
+                                .createdAt(LocalDateTime.now(BOT_TIME_ZONE))
+                                .build();
+                    });
+            if (preference.getId() != null)
+                log.debug("Reusing existing filter {} for user {} community {}", preference.getId(), userId, selectedCommunityId);
         }
 
         preference.setIsStudio(filters.getIsStudio());
