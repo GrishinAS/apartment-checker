@@ -4,8 +4,8 @@ apartments:
   communities:
     - communityId: 11584d39-2644-4b8e-8548-7c2a126c0570
       name: Promenade
-    - communityId: 460bfd6a-5f76-4e47-9d6d-2fa3d8f6fc11
-      name: Los Olivos
+    - communityId: 8af0a529-cf5d-4538-8534-93edcdcd3e48
+      name: Pacifica
 
 logging:
   level:
@@ -18,15 +18,15 @@ spring:
     web-application-type: servlet
   application.name: apartment.checker
   datasource:
-    url: jdbc:postgresql://localhost/apartments
-    driverClassName: org.postgresql.Driver
+    url: jdbc:h2:mem:apartments;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driverClassName: org.h2.Driver
     username: ${SQL_DB_USERNAME}
     password: ${SQL_DB_PASSWORD}
 
   jpa:
-    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
-      ddl-auto: update
+      ddl-auto: create-drop
     show-sql: false
     properties:
       hibernate:

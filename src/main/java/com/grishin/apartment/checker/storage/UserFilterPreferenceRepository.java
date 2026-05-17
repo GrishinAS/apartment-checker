@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Optional;
 
 public interface UserFilterPreferenceRepository extends JpaRepository<UserFilterPreference, Long> {
-    Optional<UserFilterPreference> findByUserId(Long userId);
+    List<UserFilterPreference> findAllByUserId(Long userId);
+    Optional<UserFilterPreference> findByUserIdAndSelectedCommunity(Long userId, String selectedCommunity);
     List<UserFilterPreference> findBySelectedCommunity(String community);
 }

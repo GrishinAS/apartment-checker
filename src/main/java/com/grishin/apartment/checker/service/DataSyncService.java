@@ -78,9 +78,16 @@ public class DataSyncService {
     }
 
     @Transactional
-    public List<Unit> findApartmentsForUser(Long userId) {
-        ApartmentFilter filters = userFilterService.getUserFilters(userId);
-        return findApartmentsWithFilters(filters);
+    public List<Unit> findApartmentsForUserAndCommunity(Long userId, String communityId) {
+        return userFilterService.getAllUserPreferences(userId).stream()
+                .filter(p -> communityId.equals(p.getSelectedCommunity()))
+                .flatMap(p -> findApartmentsWithFilters(ApartmentFilter.createFrom(p)).stream())
+                .collect(java.util.stream.Collectors.toMap(
+                        u -> u.getObjectId(),
+                        u -> u,
+                        (a, b) -> a,
+                        java.util.LinkedHashMap::new))
+                .values().stream().toList();
     }
 
     private FloorPlanGroup getOrCreateFloorPlanGroup(String groupType) {

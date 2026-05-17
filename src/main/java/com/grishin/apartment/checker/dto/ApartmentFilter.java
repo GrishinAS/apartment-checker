@@ -21,6 +21,7 @@ public class ApartmentFilter {
     private Date minDate;
     private Date maxDate;
     private String communityId;
+    private String floorPlanNameContains;
 
     public static ApartmentFilter createFrom(UserFilterPreference filter) {
         ApartmentFilter apartmentFilter = new ApartmentFilter();
@@ -36,6 +37,7 @@ public class ApartmentFilter {
         apartmentFilter.setMaxFloor(filter.getMaxFloor());
         apartmentFilter.setMinDate(filter.getAvailableFrom());
         apartmentFilter.setMaxDate(filter.getAvailableUntil());
+        apartmentFilter.setFloorPlanNameContains(filter.getFloorplanName());
         return apartmentFilter;
     }
 }

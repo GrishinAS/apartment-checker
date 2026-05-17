@@ -69,6 +69,13 @@ public class ApartmentSpecifications {
                 predicates.add(criteriaBuilder.lessThanOrEqualTo(root.get("unitFloor"), filter.getMaxFloor()));
             }
 
+            if (filter.getFloorPlanNameContains() != null) {
+                predicates.add(criteriaBuilder.like(
+                        criteriaBuilder.lower(floorPlanJoin.get("floorPlanName")),
+                        "%" + filter.getFloorPlanNameContains().toLowerCase() + "%"
+                ));
+            }
+
             if (filter.getAmenities() != null && !filter.getAmenities().isEmpty()) {
                 Join<Unit, UnitAmenity> amenityJoin = root.join("amenities", JoinType.INNER);
 

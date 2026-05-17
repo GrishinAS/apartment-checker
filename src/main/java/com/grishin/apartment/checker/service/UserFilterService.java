@@ -16,7 +16,6 @@ import org.springframework.stereotype.Service;
 import java.sql.Date;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 import static com.grishin.apartment.checker.telegram.MainBotController.BOT_TIME_ZONE;
 
@@ -46,19 +45,28 @@ public class UserFilterService {
     }
 
     @Transactional
-    public void saveUserFilters(Long userId, String selectedCommunityId, ApartmentFilter filters) {
-        Optional<UserFilterPreference> existingPreference = userFilterRepository.findByUserId(userId);
-
+    public void saveUserFilters(Long userId, String selectedCommunityId, ApartmentFilter filters, Long existingFilterId) {
         UserFilterPreference preference;
-        if (existingPreference.isPresent()) {
-            log.debug("Updating existing user filters for user {}", userId);
-            preference = existingPreference.get();
+        if (existingFilterId != null) {
+            preference = userFilterRepository.findById(existingFilterId).orElseGet(() -> {
+                log.warn("Filter {} not found for editing, creating new", existingFilterId);
+                return UserFilterPreference.builder()
+                        .userId(userId)
+                        .createdAt(LocalDateTime.now(BOT_TIME_ZONE))
+                        .build();
+            });
+            log.debug("Updating existing filter {} for user {}", existingFilterId, userId);
         } else {
-            log.debug("Creating new user filters for user {}", userId);
-            preference = UserFilterPreference.builder()
-                    .userId(userId)
-                    .createdAt(LocalDateTime.now(BOT_TIME_ZONE))
-                    .build();
+            preference = userFilterRepository.findByUserIdAndSelectedCommunity(userId, selectedCommunityId)
+                    .orElseGet(() -> {
+                        log.debug("Creating new filter for user {} community {}", userId, selectedCommunityId);
+                        return UserFilterPreference.builder()
+                                .userId(userId)
+                                .createdAt(LocalDateTime.now(BOT_TIME_ZONE))
+                                .build();
+                    });
+            if (preference.getId() != null)
+                log.debug("Reusing existing filter {} for user {} community {}", preference.getId(), userId, selectedCommunityId);
         }
 
         preference.setIsStudio(filters.getIsStudio());
@@ -70,28 +78,27 @@ public class UserFilterService {
         preference.setMaxPrice(filters.getMaxPrice());
         preference.setMinFloor(filters.getMinFloor());
         preference.setMaxFloor(filters.getMaxFloor());
-        preference.setAvailableFrom(new Date(filters.getMinDate().getTime()));
-        preference.setAvailableUntil(new Date(filters.getMaxDate().getTime()));
+        preference.setAvailableFrom(filters.getMinDate() != null ? new Date(filters.getMinDate().getTime()) : null);
+        preference.setAvailableUntil(filters.getMaxDate() != null ? new Date(filters.getMaxDate().getTime()) : null);
+        preference.setFloorplanName(filters.getFloorPlanNameContains());
         preference.setUpdatedAt(LocalDateTime.now(BOT_TIME_ZONE));
         preference.setSelectedCommunity(selectedCommunityId);
 
         userFilterRepository.save(preference);
     }
 
-    public ApartmentFilter getUserFilters(Long userId) {
-        Optional<UserFilterPreference> preference = userFilterRepository.findByUserId(userId);
-
-        if (preference.isPresent()) {
-            UserFilterPreference userPref = preference.get();
-            return ApartmentFilter.createFrom(userPref);
-        }
-
-        return new ApartmentFilter();
+    public List<UserFilterPreference> getAllUserPreferences(Long userId) {
+        return userFilterRepository.findAllByUserId(userId);
     }
 
     @Transactional
     public void clearUserFilters(Long userId) {
-        userFilterRepository.findByUserId(userId).ifPresent(userFilterRepository::delete);
+        List<UserFilterPreference> prefs = userFilterRepository.findAllByUserId(userId);
+        userFilterRepository.deleteAll(prefs);
     }
 
+    @Transactional
+    public void clearUserFilter(Long filterId) {
+        userFilterRepository.deleteById(filterId);
+    }
 }
