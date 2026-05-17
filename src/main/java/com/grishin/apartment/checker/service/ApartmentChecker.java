@@ -49,6 +49,8 @@ public class ApartmentChecker {
                         .flatMap(group -> group.getUnits().stream())
                         .filter(unit -> !existingUnitIds.contains(unit.getObjectID())).collect(Collectors.toSet());
 
+                log.debug("New apartments added: {}", newApartmentsForCommunity);
+
                 newApartmentsPerCommunity.put(community.getName(), newApartmentsForCommunity);
 
                 dataSyncService.processApartmentData(newApartmentDataForCommunity, community.getCommunityId());
@@ -56,9 +58,11 @@ public class ApartmentChecker {
 
             for (CommunityConfig community : communities) {
 
+                log.info("Notifications for community: {}", community.getName());
                 List<UserFilterPreference> usersThatSelectedCommunity = dataSyncService.findUsersBySelectedCommunity(community);
 
                 for (UserFilterPreference userPref : usersThatSelectedCommunity) {
+                    log.info("Notifications for community: {}, user: {}", community.getName(), userPref.getUserId());
                     ApartmentFilter userFilters = ApartmentFilter.createFrom(userPref);
 
                     List<String> newApartmentsIdsForCommunity = newApartmentsPerCommunity.get(community.getName())
@@ -67,6 +71,8 @@ public class ApartmentChecker {
                             .toList();
 
                     List<UnitMessage> filteredNewUnits = dataSyncService.findApartmentsByIdsWithFilters(userFilters, newApartmentsIdsForCommunity);
+
+                    log.info("Filtered units for notifications: {}", filteredNewUnits);
 
                     for (UnitMessage newApartment : filteredNewUnits) {
                         try {
@@ -77,7 +83,7 @@ public class ApartmentChecker {
                     }
                 }
             }
-
+            log.info("Processing is done");
         } catch (Exception e) {
             log.error("Error during apartment check", e);
         }
@@ -107,6 +113,7 @@ public class ApartmentChecker {
     }
 
     private List<FloorPlanGroupDTO> fetchAvailableApartments(String communityId) {
+        log.info("Fetching units for communityId: {}", communityId);
         return client.fetchApartments(communityId, 10);
     }
 }
