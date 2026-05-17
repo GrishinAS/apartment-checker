@@ -2,6 +2,7 @@ package com.grishin.apartment.checker.telegram;
 
 enum ConversationState {
     IDLE,
+    MANAGING_SUBSCRIPTIONS,
     WAITING_FOR_COMMUNITY,
     FILTER_MENU,
     WAITING_FOR_AMENITIES,

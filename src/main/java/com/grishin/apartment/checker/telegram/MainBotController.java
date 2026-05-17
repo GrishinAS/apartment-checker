@@ -8,6 +8,7 @@ import com.grishin.apartment.checker.service.UserFilterService;
 import com.grishin.apartment.checker.storage.UnitAmenityRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
 import com.grishin.apartment.checker.storage.entity.UnitAmenity;
+import com.grishin.apartment.checker.storage.entity.UserFilterPreference;
 import io.github.dostonhamrakulov.InlineCalendarBuilder;
 import io.github.dostonhamrakulov.InlineCalendarCommandUtil;
 import io.github.dostonhamrakulov.LanguageEnum;
@@ -45,6 +46,8 @@ public class MainBotController {
     private final Map<Long, String> selectedCommunities = new HashMap<>();
     private final Map<Long, Set<String>> userSelections = new ConcurrentHashMap<>();
     private final Map<Long, Integer> userPages = new ConcurrentHashMap<>();
+    private final Map<Long, Long> editingFilterIds = new HashMap<>();
+    private final Map<Long, Long> viewingFilterIds = new HashMap<>();
 
     private final TelegramBotClient botClient;
     private final ApartmentsConfig apartmentsConfig;
@@ -89,14 +92,14 @@ public class MainBotController {
 
             if (messageText.equalsIgnoreCase("restart")) {
                 log.info("Restart received. Restarting the session");
-                newChat(chatId);
+                cancelCurrentFlow(chatId);
                 return;
             }
 
             ConversationState currentState = userStates.get(chatId);
             log.info("Received message '{}' in state '{}'", messageText, currentState);
             switch (currentState) {
-                case IDLE -> handleDefaultState(messageText, chatId);
+                case IDLE, MANAGING_SUBSCRIPTIONS -> handleDefaultState(messageText, chatId);
                 case WAITING_FOR_COMMUNITY -> {
                     processSelectedCommunity(chatId, messageText);
                     sendFilterMenu(chatId);
@@ -113,21 +116,99 @@ public class MainBotController {
 
     private void handleDefaultState(String messageText, long chatId) throws TelegramApiException {
         switch (messageText) {
-            case "/start" -> newChat(chatId);
-            case "/get_current_available" -> sendApartmentList(chatId);
-            case "/unsubscribe" -> unsubscribeUser(chatId);
+            case "/start" -> newSubscription(chatId);
+            case "/get_current_available" -> sendSubscriptionSelectionForView(chatId);
+            case "/subscriptions", "/unsubscribe" -> sendSubscriptionManagement(chatId);
         }
     }
 
-    private void unsubscribeUser(long chatId) {
-        log.info("Unsubscribing user {}", chatId);
-        userFilterService.clearUserFilters(chatId);
+    private void cancelCurrentFlow(long chatId) throws TelegramApiException {
+        editingFilterIds.remove(chatId);
+        userPreferences.remove(chatId);
+        selectedCommunities.remove(chatId);
+        userSelections.remove(chatId);
+        userStates.put(chatId, ConversationState.IDLE);
+        sendMessage(chatId, "Cancelled. Use /start to add a subscription or /subscriptions to manage existing ones.");
     }
 
-    private void newChat(long chatId) throws TelegramApiException {
+    private void newSubscription(long chatId) throws TelegramApiException {
+        editingFilterIds.remove(chatId);
         sendCommunitySelection(chatId);
         userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
         userPreferences.put(chatId, new ApartmentFilter());
+    }
+
+    private void startEditSubscription(long chatId, long filterId) throws TelegramApiException {
+        editingFilterIds.put(chatId, filterId);
+        sendCommunitySelection(chatId);
+        userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
+        userPreferences.put(chatId, new ApartmentFilter());
+    }
+
+    private void sendSubscriptionManagement(long chatId) throws TelegramApiException {
+        List<UserFilterPreference> prefs = userFilterService.getAllUserPreferences(chatId);
+        userStates.put(chatId, ConversationState.MANAGING_SUBSCRIPTIONS);
+
+        if (prefs.isEmpty()) {
+            sendMessage(chatId, "You have no active subscriptions. Use /start to create one.");
+            userStates.put(chatId, ConversationState.IDLE);
+            return;
+        }
+
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText("Your subscriptions:");
+        message.setReplyMarkup(buildSubscriptionManagementKeyboard(prefs));
+        botClient.execute(message);
+    }
+
+    private InlineKeyboardMarkup buildSubscriptionManagementKeyboard(List<UserFilterPreference> prefs) {
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+
+        for (UserFilterPreference pref : prefs) {
+            String label = subscriptionLabel(pref);
+            keyboard.add(makeRow(
+                    makeButton("✏️ " + label, "sub:edit:" + pref.getId()),
+                    makeButton("🗑 Delete", "sub:delete:" + pref.getId())
+            ));
+        }
+
+        keyboard.add(makeRow(makeButton("➕ Add new subscription", "sub:add")));
+        if (prefs.size() > 1) {
+            keyboard.add(makeRow(makeButton("🗑 Delete all subscriptions", "sub:delete_all")));
+        }
+
+        markup.setKeyboard(keyboard);
+        return markup;
+    }
+
+    private String subscriptionLabel(UserFilterPreference pref) {
+        String communityName = apartmentsConfig.getCommunities().stream()
+                .filter(c -> c.getCommunityId().equals(pref.getSelectedCommunity()))
+                .map(CommunityConfig::getName)
+                .findFirst().orElse(pref.getSelectedCommunity());
+
+        StringBuilder sb = new StringBuilder(communityName);
+        sb.append(" · ");
+
+        if (Boolean.TRUE.equals(pref.getIsStudio())) {
+            sb.append("Studio");
+        } else if (pref.getMinBedrooms() != null) {
+            sb.append(pref.getMinBedrooms()).append("bd");
+            if (pref.getFloorplanName() != null) sb.append("+den");
+        } else {
+            sb.append("Any unit");
+        }
+
+        if (pref.getMinPrice() != null || pref.getMaxPrice() != null) {
+            sb.append(" $");
+            if (pref.getMinPrice() != null) sb.append(pref.getMinPrice());
+            sb.append("-");
+            if (pref.getMaxPrice() != null) sb.append(pref.getMaxPrice());
+        }
+
+        return sb.toString();
     }
 
     private void handleCallbackQuery(Update update) {
@@ -168,11 +249,50 @@ public class MainBotController {
                     userPages.put(chatId, page);
                     updateApartmentList(chatId, messageId);
                     break;
+                case "sub":
+                    handleSubscriptionCallback(parts, chatId);
+                    break;
+                case "view":
+                    long filterId = Long.parseLong(parts[1]);
+                    viewingFilterIds.put(chatId, filterId);
+                    userPages.put(chatId, 0);
+                    sendApartmentList(chatId);
+                    break;
             }
 
         } catch (NumberFormatException | TelegramApiException | ParseException e) {
             log.error("Error handling callback query", e);
             throw new RuntimeException(e);
+        }
+    }
+
+    private void handleSubscriptionCallback(String[] parts, long chatId) throws TelegramApiException {
+        String action = parts[1];
+        switch (action) {
+            case "edit": {
+                long filterId = Long.parseLong(parts[2]);
+                startEditSubscription(chatId, filterId);
+                break;
+            }
+            case "delete": {
+                long filterId = Long.parseLong(parts[2]);
+                userFilterService.clearUserFilter(filterId);
+                log.info("Deleted subscription {} for user {}", filterId, chatId);
+                sendMessage(chatId, "Subscription deleted.");
+                sendSubscriptionManagement(chatId);
+                break;
+            }
+            case "delete_all": {
+                userFilterService.clearUserFilters(chatId);
+                log.info("Deleted all subscriptions for user {}", chatId);
+                userStates.put(chatId, ConversationState.IDLE);
+                sendMessage(chatId, "All subscriptions deleted. Use /start to create a new one.");
+                break;
+            }
+            case "add": {
+                newSubscription(chatId);
+                break;
+            }
         }
     }
 
@@ -294,7 +414,6 @@ public class MainBotController {
         ApartmentFilter prefs = userPreferences.get(chatId);
         userStates.put(chatId, ConversationState.FILTER_MENU);
 
-        // Clear any active reply keyboard with a summary message, then show inline filter menu
         SendMessage clearMsg = createMessageWithKeyboard(chatId, buildFilterSummaryText(prefs), clearKeyboard());
         botClient.execute(clearMsg);
 
@@ -421,19 +540,54 @@ public class MainBotController {
         return new ArrayList<>(Arrays.asList(buttons));
     }
 
-    private void sendApartmentList(long chatId) throws TelegramApiException {
-        int currentPage = userPages.getOrDefault(chatId, 0);
-        ApartmentFilter filters = userFilterService.getUserFilters(chatId);
-        if (filters == null) {
-            sendMessage(chatId, "You don't have any preferences set. Please use /start to set them.");
+    private void sendSubscriptionSelectionForView(long chatId) throws TelegramApiException {
+        List<UserFilterPreference> prefs = userFilterService.getAllUserPreferences(chatId);
+        if (prefs.isEmpty()) {
+            sendMessage(chatId, "You have no active subscriptions. Use /start to create one.");
             return;
         }
-        List<Unit> allApartments = userFilterService.findApartmentsWithFilters(filters);
+        if (prefs.size() == 1) {
+            viewingFilterIds.put(chatId, prefs.get(0).getId());
+            userPages.put(chatId, 0);
+            sendApartmentList(chatId);
+            return;
+        }
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        for (UserFilterPreference pref : prefs) {
+            keyboard.add(makeRow(makeButton(subscriptionLabel(pref), "view:" + pref.getId())));
+        }
+        markup.setKeyboard(keyboard);
 
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
-        message.setText(generateApartmentListText(allApartments, currentPage));
-        message.setReplyMarkup(generateApartmentListKeyboard(allApartments, currentPage));
+        message.setText("Choose a subscription to view available apartments:");
+        message.setReplyMarkup(markup);
+        botClient.execute(message);
+    }
+
+    private void sendApartmentList(long chatId) throws TelegramApiException {
+        Long filterId = viewingFilterIds.get(chatId);
+        if (filterId == null) {
+            sendSubscriptionSelectionForView(chatId);
+            return;
+        }
+        List<UserFilterPreference> prefs = userFilterService.getAllUserPreferences(chatId);
+        UserFilterPreference pref = prefs.stream().filter(p -> p.getId().equals(filterId)).findFirst().orElse(null);
+        if (pref == null) {
+            viewingFilterIds.remove(chatId);
+            sendSubscriptionSelectionForView(chatId);
+            return;
+        }
+
+        int currentPage = userPages.getOrDefault(chatId, 0);
+        List<Unit> apartments = userFilterService.findApartmentsWithFilters(ApartmentFilter.createFrom(pref));
+
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(generateApartmentListText(apartments, currentPage));
+        message.setReplyMarkup(generateApartmentListKeyboard(apartments, currentPage));
         message.enableHtml(true);
 
         botClient.execute(message);
@@ -441,19 +595,22 @@ public class MainBotController {
 
     @Transactional
     private void updateApartmentList(long chatId, int messageId) throws TelegramApiException {
-        int currentPage = userPages.getOrDefault(chatId, 0);
-        ApartmentFilter filters = userFilterService.getUserFilters(chatId);
-        if (filters == null) {
-            sendMessage(chatId, "You don't have any preferences set. Please use /start to set them.");
-            return;
+        Long filterId = viewingFilterIds.get(chatId);
+        List<Unit> apartments;
+        if (filterId != null) {
+            List<UserFilterPreference> prefs = userFilterService.getAllUserPreferences(chatId);
+            UserFilterPreference pref = prefs.stream().filter(p -> p.getId().equals(filterId)).findFirst().orElse(null);
+            apartments = pref != null ? userFilterService.findApartmentsWithFilters(ApartmentFilter.createFrom(pref)) : List.of();
+        } else {
+            apartments = List.of();
         }
-        List<Unit> apartmentsForUser = userFilterService.findApartmentsWithFilters(filters);
 
+        int currentPage = userPages.getOrDefault(chatId, 0);
         EditMessageText editMessage = new EditMessageText();
         editMessage.setChatId(String.valueOf(chatId));
         editMessage.setMessageId(messageId);
-        editMessage.setText(generateApartmentListText(apartmentsForUser, currentPage));
-        editMessage.setReplyMarkup(generateApartmentListKeyboard(apartmentsForUser, currentPage));
+        editMessage.setText(generateApartmentListText(apartments, currentPage));
+        editMessage.setReplyMarkup(generateApartmentListKeyboard(apartments, currentPage));
         editMessage.enableHtml(true);
 
         botClient.execute(editMessage);
@@ -761,12 +918,19 @@ public class MainBotController {
     }
 
     private void sendFinalConfirmation(long chatId) throws TelegramApiException {
-        String text = """
-                Your preferences have been saved! You will receive updates based on your criteria.
+        boolean isEdit = editingFilterIds.containsKey(chatId);
+        editingFilterIds.remove(chatId);
 
-                Type /start to set new preferences anytime or /get_current_available to see current available apartments.
+        String text = isEdit
+                ? """
+                Subscription updated! You will receive updates based on your new criteria.
 
-                Type /unsubscribe to stop receiving updates.""";
+                Use /subscriptions to manage all your subscriptions."""
+                : """
+                Subscription saved! You will receive updates based on your criteria.
+
+                Use /start to add another subscription or /subscriptions to manage existing ones.""";
+
         SendMessage message = createMessageWithKeyboard(chatId, text, clearKeyboard());
         botClient.execute(message);
     }
@@ -777,7 +941,8 @@ public class MainBotController {
         CommunityConfig selectedCommunity = apartmentsConfig.getCommunities().stream()
                 .filter(c -> c.getName().equals(selectedCommunityName))
                 .findFirst().orElseThrow();
-        userFilterService.saveUserFilters(chatId, selectedCommunity.getCommunityId(), gatheredPreferences);
+        Long existingFilterId = editingFilterIds.get(chatId);
+        userFilterService.saveUserFilters(chatId, selectedCommunity.getCommunityId(), gatheredPreferences, existingFilterId);
     }
 
     public void sendMessage(long chatId, String text) throws TelegramApiException {
