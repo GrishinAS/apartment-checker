@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 import java.sql.Date;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 import static com.grishin.apartment.checker.telegram.MainBotController.BOT_TIME_ZONE;
 
@@ -89,6 +90,14 @@ public class UserFilterService {
 
     public List<UserFilterPreference> getAllUserPreferences(Long userId) {
         return userFilterRepository.findAllByUserId(userId);
+    }
+
+    @Transactional
+    public Optional<UserFilterPreference> getPreferenceWithAmenities(Long filterId) {
+        return userFilterRepository.findById(filterId).map(p -> {
+            Hibernate.initialize(p.getAmenities());
+            return p;
+        });
     }
 
     @Transactional

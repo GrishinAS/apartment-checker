@@ -38,6 +38,11 @@ public class ApartmentFilter {
         apartmentFilter.setMinDate(filter.getAvailableFrom());
         apartmentFilter.setMaxDate(filter.getAvailableUntil());
         apartmentFilter.setFloorPlanNameContains(filter.getFloorplanName());
+        if (filter.getAmenities() != null && !filter.getAmenities().isEmpty()) {
+            apartmentFilter.setAmenities(filter.getAmenities().stream()
+                    .map(com.grishin.apartment.checker.storage.entity.UnitAmenity::getAmenityName)
+                    .toList());
+        }
         return apartmentFilter;
     }
 }

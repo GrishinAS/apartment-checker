@@ -140,9 +140,32 @@ public class MainBotController {
 
     private void startEditSubscription(long chatId, long filterId) throws TelegramApiException {
         editingFilterIds.put(chatId, filterId);
-        sendCommunitySelection(chatId);
-        userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
-        userPreferences.put(chatId, new ApartmentFilter());
+
+        userFilterService.getPreferenceWithAmenities(filterId)
+                .ifPresentOrElse(
+                        existing -> {
+                            userPreferences.put(chatId, ApartmentFilter.createFrom(existing));
+                            apartmentsConfig.getCommunities().stream()
+                                    .filter(c -> c.getCommunityId().equals(existing.getSelectedCommunity()))
+                                    .findFirst()
+                                    .ifPresent(c -> selectedCommunities.put(chatId, c.getName()));
+                            try {
+                                sendFilterMenu(chatId);
+                            } catch (TelegramApiException e) {
+                                throw new RuntimeException(e);
+                            }
+                        },
+                        () -> {
+                            // Preference not found — fall back to full flow
+                            userPreferences.put(chatId, new ApartmentFilter());
+                            try {
+                                sendCommunitySelection(chatId);
+                                userStates.put(chatId, ConversationState.WAITING_FOR_COMMUNITY);
+                            } catch (TelegramApiException e) {
+                                throw new RuntimeException(e);
+                            }
+                        }
+                );
     }
 
     private void sendSubscriptionManagement(long chatId) throws TelegramApiException {
