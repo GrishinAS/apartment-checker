@@ -6,6 +6,12 @@ apartments:
       name: Promenade
     - communityId: 460bfd6a-5f76-4e47-9d6d-2fa3d8f6fc11
       name: Los Olivos
+    - communityId: 81a376da-70ac-4ba8-8b2d-1ffe3c3d1afb
+      name: Village
+    - communityId: 8af0a529-cf5d-4538-8534-93edcdcd3e48
+      name: Pacifica
+    - communityId: f673eef6-445f-41a1-900c-82ac0fb82055
+      name: The Park
 
 logging:
   level:
