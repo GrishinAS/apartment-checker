@@ -97,7 +97,6 @@ public class MainBotController {
             }
 
             if (messageText.startsWith("/")) {
-                cancelCurrentFlow(chatId);
                 handleDefaultState(messageText, chatId);
                 return;
             }
@@ -112,8 +111,6 @@ public class MainBotController {
                 }
                 case SETTING_MIN_PRICE -> processMinPrice(chatId, messageText);
                 case SETTING_MAX_PRICE -> processMaxPrice(chatId, messageText);
-                case SETTING_MIN_FLOOR -> processMinFloor(chatId, messageText);
-                case SETTING_MAX_FLOOR -> processMaxFloor(chatId, messageText);
             }
         } catch (Exception e) {
             log.error("Error during handling update", e);
@@ -280,6 +277,9 @@ public class MainBotController {
                     break;
                 case "sub":
                     handleSubscriptionCallback(parts, chatId);
+                    break;
+                case "floor":
+                    handleFloorCallback(parts[1], chatId);
                     break;
                 case "view":
                     long filterId = Long.parseLong(parts[1]);
@@ -825,62 +825,49 @@ public class MainBotController {
 
     private void sendFloorRequest(long chatId) throws TelegramApiException {
         ConversationState state = userStates.get(chatId);
-        String title;
-        String skipButton;
-        if (state == ConversationState.SETTING_MIN_FLOOR) {
-            title = "Enter minimum floor:";
-            skipButton = "No Min Floor";
-        } else if (state == ConversationState.SETTING_MAX_FLOOR) {
-            title = "Enter maximum floor:";
-            skipButton = "No Max Floor";
-        } else throw new RuntimeException("Invalid state");
+        boolean isMin = state == ConversationState.SETTING_MIN_FLOOR;
+        String title = isMin ? "Select minimum floor:" : "Select maximum floor:";
+        String anyLabel = isMin ? "Any (no min)" : "Any (no max)";
 
-        SendMessage message = createMessageWithKeyboard(chatId, title, createKeyboardFromList(List.of(skipButton, "Cancel")));
+        Integer minFloor = isMin ? null : userPreferences.get(chatId).getMinFloor();
+
+        List<InlineKeyboardButton> floorRow = new ArrayList<>();
+        for (int i = 1; i <= 5; i++) {
+            if (minFloor == null || i >= minFloor) {
+                floorRow.add(makeButton(String.valueOf(i), "floor:" + i));
+            }
+        }
+
+        InlineKeyboardMarkup markup = new InlineKeyboardMarkup();
+        List<List<InlineKeyboardButton>> keyboard = new ArrayList<>();
+        keyboard.add(floorRow);
+        keyboard.add(makeRow(makeButton(anyLabel, "floor:any"), makeButton("Cancel", "floor:cancel")));
+        markup.setKeyboard(keyboard);
+
+        SendMessage message = new SendMessage();
+        message.setChatId(String.valueOf(chatId));
+        message.setText(title);
+        message.setReplyMarkup(markup);
         botClient.execute(message);
     }
 
-    private void processMinFloor(long chatId, String floorString) throws TelegramApiException {
-        if (floorString.equals("Cancel")) {
+    private void handleFloorCallback(String value, long chatId) throws TelegramApiException {
+        if (value.equals("cancel")) {
             sendFilterMenu(chatId);
             return;
         }
 
+        ConversationState state = userStates.get(chatId);
         ApartmentFilter prefs = userPreferences.get(chatId);
-        if (floorString.equals("No Min Floor")) {
-            prefs.setMinFloor(null);
-        } else {
-            int floor = Integer.parseInt(floorString.trim());
-            if (floor < 1) {
-                sendMessage(chatId, "Floor must be at least 1");
-                sendFloorRequest(chatId);
-                return;
-            }
-            prefs.setMinFloor(floor);
-        }
-        userStates.put(chatId, ConversationState.SETTING_MAX_FLOOR);
-        sendFloorRequest(chatId);
-    }
 
-    private void processMaxFloor(long chatId, String floorString) throws TelegramApiException {
-        if (floorString.equals("Cancel")) {
+        if (state == ConversationState.SETTING_MIN_FLOOR) {
+            prefs.setMinFloor(value.equals("any") ? null : Integer.parseInt(value));
+            userStates.put(chatId, ConversationState.SETTING_MAX_FLOOR);
+            sendFloorRequest(chatId);
+        } else if (state == ConversationState.SETTING_MAX_FLOOR) {
+            prefs.setMaxFloor(value.equals("any") ? null : Integer.parseInt(value));
             sendFilterMenu(chatId);
-            return;
         }
-
-        ApartmentFilter prefs = userPreferences.get(chatId);
-        if (floorString.equals("No Max Floor")) {
-            prefs.setMaxFloor(null);
-        } else {
-            int floor = Integer.parseInt(floorString.trim());
-            Integer minFloor = prefs.getMinFloor();
-            if (minFloor != null && floor < minFloor) {
-                sendMessage(chatId, "Maximum floor must be greater than minimum floor: " + minFloor);
-                sendFloorRequest(chatId);
-                return;
-            }
-            prefs.setMaxFloor(floor);
-        }
-        sendFilterMenu(chatId);
     }
 
     private void sendCommunitySelection(long chatId) throws TelegramApiException {
