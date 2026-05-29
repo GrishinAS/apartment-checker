@@ -62,7 +62,7 @@ public class DataSyncService {
     }
 
     public List<UserFilterPreference> findUsersBySelectedCommunity(CommunityConfig community) {
-        return userFilterPreferenceRepository.findBySelectedCommunity(community.getName());
+        return userFilterPreferenceRepository.findBySelectedCommunity(community.getCommunityId());
     }
 
     public List<Unit> findApartmentsWithFilters(ApartmentFilter filters) {

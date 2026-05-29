@@ -2,6 +2,7 @@ package com.grishin.apartment.checker.service;
 
 import com.grishin.apartment.checker.dto.ApartmentFilter;
 import com.grishin.apartment.checker.storage.ApartmentSpecifications;
+import com.grishin.apartment.checker.storage.UnitAmenityRepository;
 import com.grishin.apartment.checker.storage.UnitRepository;
 import com.grishin.apartment.checker.storage.UserFilterPreferenceRepository;
 import com.grishin.apartment.checker.storage.entity.Unit;
@@ -26,13 +27,16 @@ public class UserFilterService {
 
     private final UserFilterPreferenceRepository userFilterRepository;
     private final UnitRepository unitRepository;
+    private final UnitAmenityRepository unitAmenityRepository;
 
     @Autowired
     public UserFilterService(
             UserFilterPreferenceRepository userFilterRepository,
-            UnitRepository unitRepository) {
+            UnitRepository unitRepository,
+            UnitAmenityRepository unitAmenityRepository) {
         this.userFilterRepository = userFilterRepository;
         this.unitRepository = unitRepository;
+        this.unitAmenityRepository = unitAmenityRepository;
     }
 
     @Transactional
@@ -84,6 +88,13 @@ public class UserFilterService {
         preference.setFloorplanName(filters.getFloorPlanNameContains());
         preference.setUpdatedAt(LocalDateTime.now(BOT_TIME_ZONE));
         preference.setSelectedCommunity(selectedCommunityId);
+        preference.getAmenities().clear();
+        if (filters.getAmenities() != null) {
+            filters.getAmenities().stream()
+                    .map(unitAmenityRepository::findByAmenityName)
+                    .flatMap(Optional::stream)
+                    .forEach(preference.getAmenities()::add);
+        }
 
         userFilterRepository.save(preference);
     }
@@ -98,6 +109,16 @@ public class UserFilterService {
             Hibernate.initialize(p.getAmenities());
             return p;
         });
+    }
+
+    @Transactional
+    public List<Unit> findApartmentsForPreference(Long userId, Long filterId) {
+        Optional<UserFilterPreference> preference = userFilterRepository.findById(filterId)
+                .filter(p -> userId.equals(p.getUserId()));
+
+        return preference
+                .map(p -> findApartmentsWithFilters(ApartmentFilter.createFrom(p)))
+                .orElseGet(List::of);
     }
 
     @Transactional

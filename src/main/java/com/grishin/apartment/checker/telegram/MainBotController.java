@@ -602,16 +602,14 @@ public class MainBotController {
             sendSubscriptionSelectionForView(chatId);
             return;
         }
-        List<UserFilterPreference> prefs = userFilterService.getAllUserPreferences(chatId);
-        UserFilterPreference pref = prefs.stream().filter(p -> p.getId().equals(filterId)).findFirst().orElse(null);
-        if (pref == null) {
+        List<Unit> apartments = userFilterService.findApartmentsForPreference(chatId, filterId);
+        if (apartments.isEmpty() && userFilterService.getAllUserPreferences(chatId).stream().noneMatch(p -> p.getId().equals(filterId))) {
             viewingFilterIds.remove(chatId);
             sendSubscriptionSelectionForView(chatId);
             return;
         }
 
         int currentPage = userPages.getOrDefault(chatId, 0);
-        List<Unit> apartments = userFilterService.findApartmentsWithFilters(ApartmentFilter.createFrom(pref));
 
         SendMessage message = new SendMessage();
         message.setChatId(String.valueOf(chatId));
@@ -625,14 +623,9 @@ public class MainBotController {
     @Transactional
     private void updateApartmentList(long chatId, int messageId) throws TelegramApiException {
         Long filterId = viewingFilterIds.get(chatId);
-        List<Unit> apartments;
-        if (filterId != null) {
-            List<UserFilterPreference> prefs = userFilterService.getAllUserPreferences(chatId);
-            UserFilterPreference pref = prefs.stream().filter(p -> p.getId().equals(filterId)).findFirst().orElse(null);
-            apartments = pref != null ? userFilterService.findApartmentsWithFilters(ApartmentFilter.createFrom(pref)) : List.of();
-        } else {
-            apartments = List.of();
-        }
+        List<Unit> apartments = filterId != null
+                ? userFilterService.findApartmentsForPreference(chatId, filterId)
+                : List.of();
 
         int currentPage = userPages.getOrDefault(chatId, 0);
         EditMessageText editMessage = new EditMessageText();
