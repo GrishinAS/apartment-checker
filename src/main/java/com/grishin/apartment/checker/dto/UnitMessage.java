@@ -19,6 +19,7 @@ public class UnitMessage {
     private Integer floor;
     private Integer price;
     private String floorPlanName;
+    private Integer squareFeet;
     private List<String> amenityNames;
     private Date availableFrom;
 
@@ -32,6 +33,7 @@ public class UnitMessage {
                 .floor(unit.getUnitFloor())
                 .price(unit.getUnitEarliestAvailable().getPrice())
                 .floorPlanName(unit.getFloorPlan().getFloorPlanName())
+                .squareFeet(unit.getFloorPlan().getFloorPlanSqft())
                 .amenityNames(unit.getAmenities().stream()
                         .map(UnitAmenity::getAmenityName)
                         .toList())

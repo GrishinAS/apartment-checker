@@ -73,6 +73,7 @@ public class KeyboardUtils {
         message.append("Floor: ").append(unit.getFloor()).append("\n");
         message.append("Price: $").append(unit.getPrice()).append("\n");
         message.append("Floorplan: ").append(unit.getFloorPlanName()).append("\n");
+        message.append("Size: ").append(unit.getBathrooms()).append(" sq. ft.").append("\n");
         message.append("Amenities:\n");
         unit.getAmenityNames().forEach(amenity -> message.append("   ").append(amenity).append("\n"));
         Date availableDate = unit.getAvailableFrom();
